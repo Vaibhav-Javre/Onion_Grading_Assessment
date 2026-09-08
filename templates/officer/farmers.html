@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block title %}Farmer Directory - OnionGrade AI{% endblock %}
+{% block page_title %}Registered Farmer Directory{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header" style="flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <h3>Procurement Center Registered Farmers</h3>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.2rem;">
+        View profiles, farmer IDs, contact info, and past assessment histories
+      </p>
+    </div>
+
+    <div style="display: flex; gap: 0.75rem;">
+      <input type="text" id="farmerDirectorySearch" class="form-control" placeholder="Search by name, ID, phone..." style="width: 250px; font-size: 0.85rem;">
+      <button type="button" onclick="loadFarmerDirectory()" class="btn btn-sm btn-secondary">Search</button>
+      <button type="button" onclick="openAddFarmerModal()" class="btn btn-sm btn-primary">+ Register New Farmer</button>
+    </div>
+  </div>
+
+  <div class="card-body" style="padding: 0;">
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Farmer ID</th>
+            <th>Name</th>
+            <th>Mobile Number</th>
+            <th>Email</th>
+            <th>Village</th>
+            <th>Taluka</th>
+            <th>District</th>
+            <th>State</th>
+            <th>Registered Date</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="farmerDirectoryBody">
+          <tr><td colspan="10" style="text-align: center; padding: 2rem;">Loading farmers...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal for Registering New Farmer -->
+<div id="addFarmerModal" class="ai-progress-modal">
+  <div class="ai-progress-card" style="max-width: 520px; text-align: left;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+      <h3 style="font-size: 1.3rem; color: var(--primary-dark); margin: 0;">Register New Farmer</h3>
+      <button type="button" onclick="closeAddFarmerModal()" style="background: none; border: none; font-size: 1.25rem; cursor: pointer;">✕</button>
+    </div>
+
+    <form id="officerAddFarmerForm">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="dirFarmerName">Full Name *</label>
+          <input type="text" id="dirFarmerName" class="form-control" placeholder="e.g. Sunil Jadhav" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="dirFarmerPhone">Mobile Number *</label>
+          <input type="tel" id="dirFarmerPhone" class="form-control" placeholder="10-digit mobile" pattern="[0-9]{10}" required>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="dirFarmerVillage">Village *</label>
+          <input type="text" id="dirFarmerVillage" class="form-control" placeholder="e.g. Lasalgaon" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="dirFarmerTaluka">Taluka *</label>
+          <input type="text" id="dirFarmerTaluka" class="form-control" placeholder="e.g. Niphad" required>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="dirFarmerDistrict">District *</label>
+          <input type="text" id="dirFarmerDistrict" class="form-control" value="Nashik" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="dirFarmerState">State *</label>
+          <input type="text" id="dirFarmerState" class="form-control" value="Maharashtra" required>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1rem;">
+        <button type="button" onclick="closeAddFarmerModal()" class="btn btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create Farmer Record</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadFarmerDirectory() {
+  const query = document.getElementById("farmerDirectorySearch").value.trim();
+  const tbody = document.getElementById("farmerDirectoryBody");
+
+  try {
+    const res = await fetch(`/api/officer/farmers?query=${encodeURIComponent(query)}`);
+    const data = await res.json();
+
+    if (!data.success || !data.farmers || data.farmers.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">No farmer records found.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = data.farmers.map(f => `
+      <tr>
+        <td><span class="badge badge-info">${f.farmer_id}</span></td>
+        <td><b>${f.name}</b></td>
+        <td>${f.phone}</td>
+        <td>${f.email || '—'}</td>
+        <td>${f.village}</td>
+        <td>${f.taluka}</td>
+        <td>${f.district}</td>
+        <td>${f.state}</td>
+        <td>${f.created_at ? f.created_at.split("T")[0] : '—'}</td>
+        <td>
+          <a href="/officer/evaluate" class="btn btn-sm btn-outline">New Batch</a>
+        </td>
+      </tr>
+    `).join("");
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #ef4444; padding: 2rem;">Error loading directory.</td></tr>`;
+  }
+}
+
+function openAddFarmerModal() {
+  document.getElementById("addFarmerModal").style.display = "flex";
+}
+function closeAddFarmerModal() {
+  document.getElementById("addFarmerModal").style.display = "none";
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  loadFarmerDirectory();
+  document.getElementById("farmerDirectorySearch").addEventListener("keyup", (e) => {
+    if (e.key === "Enter") loadFarmerDirectory();
+  });
+
+  document.getElementById("officerAddFarmerForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const payload = {
+      name: document.getElementById("dirFarmerName").value.trim(),
+      phone: document.getElementById("dirFarmerPhone").value.trim(),
+      village: document.getElementById("dirFarmerVillage").value.trim(),
+      taluka: document.getElementById("dirFarmerTaluka").value.trim(),
+      district: document.getElementById("dirFarmerDistrict").value.trim(),
+      state: document.getElementById("dirFarmerState").value.trim()
+    };
+
+    try {
+      const res = await fetch("/api/officer/farmers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message, "success");
+        closeAddFarmerModal();
+        document.getElementById("officerAddFarmerForm").reset();
+        loadFarmerDirectory();
+      } else {
+        showToast(data.error || "Failed to add farmer", "error");
+      }
+    } catch(err) {
+      showToast("Network error: " + err.message, "error");
+    }
+  });
+});
+</script>
+{% endblock %}

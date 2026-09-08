@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+
+{% block title %}Report {{ evaluation.report_id or evaluation.id }} - OnionGrade AI{% endblock %}
+{% block page_title %}Evaluation Report: {{ evaluation.report_id or evaluation.id }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <a href="{{ url_for('views.farmer_reports') }}" style="font-size: 0.85rem; color: var(--text-muted); display: inline-flex; align-items: center; gap: 0.25rem; margin-bottom: 0.5rem;">
+      ← Back to My Reports
+    </a>
+    <h1 style="font-size: 1.75rem; color: var(--primary-dark); margin: 0;">
+      Report ID: <span style="color: var(--primary-green);">{{ evaluation.report_id or evaluation.id }}</span>
+    </h1>
+    <span class="badge badge-success" style="margin-top: 0.35rem;">Status: Officially Confirmed</span>
+  </div>
+
+  <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+    <a href="/reports/download/Onion_Report_{{ evaluation.report_id or evaluation.id }}.pdf?inline=1" target="_blank" class="btn btn-outline btn-lg">
+      👁️ View PDF in Browser
+    </a>
+    <a href="/reports/download/Onion_Report_{{ evaluation.report_id or evaluation.id }}.pdf" download="Onion_Report_{{ evaluation.report_id or evaluation.id }}.pdf" class="btn btn-primary btn-lg" style="box-shadow: var(--shadow-md);">
+      📥 Download Official PDF Report (.pdf)
+    </a>
+  </div>
+</div>
+
+<!-- Info Cards Grid: Farmer & Officer -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem; margin-bottom: 1.5rem;">
+  <!-- Farmer Information -->
+  <div class="card" style="margin-bottom: 0;">
+    <div class="card-header">
+      <h3>🧑‍🌾 Farmer Information</h3>
+    </div>
+    <div class="card-body">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; font-size: 0.9rem;">
+        <div><b>Farmer Name:</b></div>
+        <div>{{ farmer.user.name }}</div>
+
+        <div><b>Farmer ID:</b></div>
+        <div><span class="badge badge-info">{{ farmer.farmer_id }}</span></div>
+
+        <div><b>Mobile:</b></div>
+        <div>{{ farmer.user.phone }}</div>
+
+        <div><b>Village:</b></div>
+        <div>{{ farmer.village }}</div>
+
+        <div><b>Taluka:</b></div>
+        <div>{{ farmer.taluka }}</div>
+
+        <div><b>District:</b></div>
+        <div>{{ farmer.district }}</div>
+
+        <div><b>State:</b></div>
+        <div>{{ farmer.state }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Evaluation Information -->
+  <div class="card" style="margin-bottom: 0;">
+    <div class="card-header">
+      <h3>🏛️ Evaluation Information</h3>
+    </div>
+    <div class="card-body">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; font-size: 0.9rem;">
+        <div><b>Evaluation Date:</b></div>
+        <div>{{ evaluation.evaluation_date.strftime("%d/%m/%Y %I:%M %p") if evaluation.evaluation_date else "" }}</div>
+
+        <div><b>Procurement Officer:</b></div>
+        <div>{{ evaluation.officer.user.name if evaluation.officer else "Officer" }}</div>
+
+        <div><b>Officer ID:</b></div>
+        <div>{{ evaluation.officer.officer_id if evaluation.officer else "N/A" }}</div>
+
+        <div><b>Procurement Center:</b></div>
+        <div>{{ evaluation.officer.procurement_center if evaluation.officer else "N/A" }}</div>
+
+        <div><b>Center Location:</b></div>
+        <div>{{ evaluation.officer.location if evaluation.officer else "N/A" }}</div>
+
+        <div><b>Verification Status:</b></div>
+        <div><span style="color: var(--grade-a); font-weight: 700;">✓ Digitally Authenticated</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- AI Results Headline Summary -->
+<div class="dashboard-grid">
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Total Onions Detected</span>
+      <span class="stat-value">{{ evaluation.total_onions }}</span>
+      <span class="stat-sub">Automated YOLO11 detection</span>
+    </div>
+    <div class="stat-icon blue">🔍</div>
+  </div>
+
+  <div class="stat-card grade-a">
+    <div class="stat-info">
+      <span class="stat-label">Grade A (Healthy)</span>
+      <span class="stat-value" style="color: var(--grade-a);">{{ evaluation.grade_a_count }}</span>
+      <span class="stat-sub">{{ (evaluation.grade_a_count / (evaluation.total_onions or 1) * 100) | round(1) }}% of batch</span>
+    </div>
+    <div class="stat-icon green">✓</div>
+  </div>
+
+  <div class="stat-card urs">
+    <div class="stat-info">
+      <span class="stat-label">URS Standard (Damaged)</span>
+      <span class="stat-value" style="color: var(--grade-urs);">{{ evaluation.urs_count }}</span>
+      <span class="stat-sub">{{ (evaluation.urs_count / (evaluation.total_onions or 1) * 100) | round(1) }}% of batch</span>
+    </div>
+    <div class="stat-icon amber">⚠️</div>
+  </div>
+
+  <div class="stat-card rejected">
+    <div class="stat-info">
+      <span class="stat-label">Rejected (Rotten+Sprouted)</span>
+      <span class="stat-value" style="color: var(--grade-rej);">{{ evaluation.rejected_count }}</span>
+      <span class="stat-sub">{{ (evaluation.rejected_count / (evaluation.total_onions or 1) * 100) | round(1) }}% of batch</span>
+    </div>
+    <div class="stat-icon red">✕</div>
+  </div>
+</div>
+
+<!-- Government Mandi Price Estimation & Farmer Payout Card -->
+<div class="card" style="margin-bottom: 1.5rem; border: 1.5px solid #a7f3d0; background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%);">
+  <div class="card-header" style="background: #ecfdf5; border-bottom: 1px solid #d1fae5; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+      <span style="font-size: 1.25rem;">💰</span>
+      <div>
+        <h3 style="color: var(--primary-dark); font-size: 1.1rem; margin: 0;">Mandi Benchmark Price Estimation & Estimated Payout</h3>
+        <p style="margin: 0; font-size: 0.8rem; color: #065f46;">
+          Benchmark Mandi: <b>{{ evaluation.mandi_name or "Lasalgaon APMC Mandi" }}</b> • Source: <b>{{ evaluation.mandi_api_source or "data.gov.in" }}</b>
+        </p>
+      </div>
+    </div>
+    <span class="badge badge-info" style="font-size: 0.8rem;">Reference Date: {{ evaluation.mandi_price_date or (evaluation.evaluation_date.strftime("%d/%m/%Y") if evaluation.evaluation_date else "N/A") }}</span>
+  </div>
+  <div class="card-body">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; align-items: center;">
+      
+      <!-- Reference Modal Price -->
+      <div style="background: white; border: 1px solid #e5e7eb; border-radius: var(--radius-sm); padding: 0.85rem;">
+        <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Mandi Modal Reference</span>
+        <div style="font-size: 1.4rem; font-weight: 800; color: var(--text-dark); margin-top: 0.25rem;">
+          {{ "₹{:,.2f}".format(evaluation.mandi_modal_price) if evaluation.mandi_modal_price else "Rate Unavailable" }}
+        </div>
+        <span style="font-size: 0.75rem; color: var(--text-muted);">per Quintal (100 kg)</span>
+      </div>
+
+      <!-- Quality Score -->
+      <div style="background: white; border: 1px solid #e5e7eb; border-radius: var(--radius-sm); padding: 0.85rem;">
+        <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Batch Quality Score</span>
+        <div style="font-size: 1.4rem; font-weight: 800; color: #047857; margin-top: 0.25rem;">
+          {{ "{:.1f}%".format(evaluation.quality_score) if evaluation.quality_score is not None else "--%" }}
+        </div>
+        <span style="font-size: 0.75rem; color: var(--text-muted);">(Grade A: 100%, URS: 80%, Rej: 0%)</span>
+      </div>
+
+      <!-- Estimated Rate -->
+      <div style="background: white; border: 1px solid #e5e7eb; border-radius: var(--radius-sm); padding: 0.85rem;">
+        <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Quality-Adjusted Rate</span>
+        <div style="font-size: 1.4rem; font-weight: 800; color: var(--primary-green); margin-top: 0.25rem;">
+          {{ "₹{:,.2f}".format(evaluation.estimated_price_per_quintal) if evaluation.estimated_price_per_quintal else "--" }}
+        </div>
+        <span style="font-size: 0.75rem; color: var(--text-muted);">per Quintal</span>
+      </div>
+
+      <!-- Total Farmer Payout -->
+      <div style="background: linear-gradient(135deg, #064e3b 0%, #047857 100%); color: white; border-radius: var(--radius-sm); padding: 0.85rem 1rem;">
+        <span style="font-size: 0.75rem; color: #a7f3d0; font-weight: 700; text-transform: uppercase;">Total Farmer Payout</span>
+        <div style="font-size: 1.65rem; font-weight: 900; color: white; margin-top: 0.25rem;">
+          {{ "₹{:,.2f}".format(evaluation.total_payout) if (evaluation.total_payout and evaluation.total_payout > 0) else ("Pending Quantity" if evaluation.estimated_price_per_quintal else "N/A") }}
+        </div>
+        <span style="font-size: 0.75rem; color: #d1fae5;">
+          {% if evaluation.quantity_quintals and evaluation.quantity_quintals > 0 %}
+            For {{ "{:.2f}".format(evaluation.quantity_quintals) }} Quintals ({{ "{:,.0f}".format(evaluation.quantity_quintals * 100) }} kg)
+          {% else %}
+            Batch Quantity Not Specified
+          {% endif %}
+        </span>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Annotated Image & Charts Grid -->
+<div class="results-grid" style="margin-bottom: 1.5rem;">
+  <!-- Annotated Image -->
+  <div class="card">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+      <h3>AI Evaluated Image & Bounding Boxes</h3>
+      {% if evaluation.total_images and evaluation.total_images > 1 %}
+      <span class="badge badge-info">{{ evaluation.total_images }} Angles Analyzed</span>
+      {% endif %}
+    </div>
+    <div class="card-body" style="padding: 1rem;">
+      {% if evaluation.images and evaluation.images|length > 1 %}
+      <div class="angle-tabs-bar" style="margin-bottom: 0.75rem;">
+        <button type="button" class="angle-tab-btn active" onclick="switchReportImage(this, '/outputs/{{ evaluation.annotated_image_path | basename }}')">
+          🖼️ Overview Collage ({{ evaluation.total_images }} Angles)
+        </button>
+        {% for img in evaluation.images %}
+        <button type="button" class="angle-tab-btn" onclick="switchReportImage(this, '/outputs/{{ img.annotated_image_path | basename }}')">
+          Angle #{{ img.image_order }} ({{ img.total_onions }} bulbs)
+        </button>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <div class="annotated-viewer">
+        <img id="farmerReportAnnotatedImg" src="/outputs/{{ evaluation.annotated_image_path | basename if evaluation.annotated_image_path else '' }}" alt="AI Annotated Onion Image">
+      </div>
+      <div style="margin-top: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center; font-size: 0.8rem;">
+        <span style="color: var(--grade-a); font-weight: 600;">■ Healthy (Grade A)</span>
+        <span style="color: var(--grade-urs); font-weight: 600;">■ Damaged (URS)</span>
+        <span style="color: var(--grade-rej); font-weight: 600;">■ Rotten (Rejected)</span>
+        <span style="color: #ea580c; font-weight: 600;">■ Sprouted (Rejected)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts & Quality Distribution -->
+  <div class="card">
+    <div class="card-header">
+      <h3>Quality Distribution Analytics</h3>
+    </div>
+    <div class="card-body">
+      <!-- Donut Chart Container -->
+      <div style="height: 240px; margin-bottom: 1.5rem;">
+        <canvas id="farmerQualityDonutChart"></canvas>
+      </div>
+
+      <!-- Quality Breakdown Rows -->
+      <div class="quality-stat-row healthy">
+        <div><b>Healthy</b></div>
+        <div>{{ evaluation.healthy_count }} bulbs • {{ (evaluation.healthy_count / (evaluation.total_onions or 1) * 100) | round(1) }}%</div>
+      </div>
+      <div class="quality-stat-row damaged">
+        <div><b>Damaged</b></div>
+        <div>{{ evaluation.damaged_count }} bulbs • {{ (evaluation.damaged_count / (evaluation.total_onions or 1) * 100) | round(1) }}%</div>
+      </div>
+      <div class="quality-stat-row rotten">
+        <div><b>Rotten</b></div>
+        <div>{{ evaluation.rotten_count }} bulbs • {{ (evaluation.rotten_count / (evaluation.total_onions or 1) * 100) | round(1) }}%</div>
+      </div>
+      <div class="quality-stat-row sprouted">
+        <div><b>Sprouted</b></div>
+        <div>{{ evaluation.sprouted_count }} bulbs • {{ (evaluation.sprouted_count / (evaluation.total_onions or 1) * 100) | round(1) }}%</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quality Summary Text Box -->
+<div class="card">
+  <div class="card-header">
+    <h3>Official Quality Assessment Summary</h3>
+  </div>
+  <div class="card-body">
+    <p style="font-size: 1.05rem; line-height: 1.6; color: var(--text-dark);">
+      {{ evaluation.quality_summary }}
+    </p>
+    <div style="margin-top: 1.25rem; font-size: 0.8rem; color: var(--text-muted); font-style: italic;">
+      AI-assisted evaluation. Final procurement decisions remain subject to applicable procurement procedures and officer verification.
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+function switchReportImage(btn, url) {
+  const container = btn.closest('.card-body');
+  if (container) {
+    container.querySelectorAll('.angle-tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const img = container.querySelector('#farmerReportAnnotatedImg') || container.querySelector('img');
+    if (img) img.src = url;
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  createQualityDonutChart(
+    "farmerQualityDonutChart",
+    {{ evaluation.healthy_count }},
+    {{ evaluation.damaged_count }},
+    {{ evaluation.rotten_count }},
+    {{ evaluation.sprouted_count }}
+  );
+});
+</script>
+{% endblock %}

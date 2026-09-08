@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}OnionGrade AI - Digital Onion Procurement & Quality Assessment{% endblock %}</title>
+  <meta name="description" content="AI-Powered Onion Quality Assessment and Digital Procurement Platform for Smart India Hackathon.">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+  <div class="app-container">
+    {% if is_authenticated %}
+      <!-- Sidebar Navigation -->
+      <aside class="app-sidebar">
+        <div class="sidebar-header">
+          <a href="/" class="sidebar-brand">
+            <img src="{{ url_for('static', filename='images/logo.svg') }}" alt="OnionGrade AI Logo">
+          </a>
+        </div>
+
+        <nav class="sidebar-nav">
+          {% if current_user_role == 'farmer' %}
+            <a href="{{ url_for('views.farmer_dashboard') }}" class="nav-item {% if request.path == '/farmer/dashboard' %}active{% endif %}">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+              Dashboard
+            </a>
+            <a href="{{ url_for('views.farmer_reports') }}" class="nav-item {% if '/farmer/report' in request.path %}active{% endif %}">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+              My Reports
+            </a>
+            <a href="{{ url_for('views.farmer_market') }}" class="nav-item {% if request.path == '/farmer/market' %}active{% endif %}">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+              Market Prices
+            </a>
+            <a href="{{ url_for('views.farmer_profile') }}" class="nav-item {% if request.path == '/farmer/profile' %}active{% endif %}">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+              Profile
+            </a>
+
+          {% elif current_user_role == 'officer' %}
+            <a href="{{ url_for('views.officer_dashboard') }}" class="nav-item {% if request.path == '/officer/dashboard' %}active{% endif %}">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+              Dashboard
+            </a>
+            <a href="{{ url_for('views.officer_evaluate') }}" class="nav-item {% if request.path == '/officer/evaluate' %}active{% endif %}">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+              New Evaluation
+            </a>
+            <a href="{{ url_for('views.officer_farmers') }}" class="nav-item {% if request.path == '/officer/farmers' %}active{% endif %}">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+              Farmers
+            </a>
+            <a href="{{ url_for('views.officer_reports') }}" class="nav-item {% if '/officer/report' in request.path %}active{% endif %}">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+              Report History
+            </a>
+            <a href="{{ url_for('views.officer_market') }}" class="nav-item {% if request.path == '/officer/market' %}active{% endif %}">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+              Market Prices
+            </a>
+            <a href="{{ url_for('views.officer_profile') }}" class="nav-item {% if request.path == '/officer/profile' %}active{% endif %}">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+              Profile
+            </a>
+          {% endif %}
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="user-badge">
+            <div class="user-avatar">{{ current_user_name[:1].upper() }}</div>
+            <div class="user-info">
+              <div class="user-name">{{ current_user_name }}</div>
+              <span class="user-role-tag">{{ current_user_role }}</span>
+            </div>
+            <a href="/logout" title="Logout" style="color: #ef4444; padding: 4px;">
+              <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+            </a>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main Container with Topbar -->
+      <main class="app-main">
+        <header class="app-topbar">
+          <div class="page-title-area">
+            <button type="button" id="sidebarToggle" class="sidebar-toggle-btn">
+              <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            </button>
+            <h2 style="font-size: 1.35rem; color: var(--primary-dark);">{% block page_title %}Dashboard{% endblock %}</h2>
+          </div>
+          <div class="topbar-actions">
+            {% if current_user_role == 'farmer' %}
+              <span class="badge badge-info" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">
+                Farmer ID: <b>{{ current_farmer_id }}</b>
+              </span>
+            {% elif current_user_role == 'officer' %}
+              <a href="{{ url_for('views.officer_evaluate') }}" class="btn btn-sm btn-primary">
+                + New Evaluation
+              </a>
+            {% endif %}
+          </div>
+        </header>
+
+        <section class="app-content">
+          {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+              {% for category, message in messages %}
+                <div class="toast {{ category }}" style="position: relative; margin-bottom: 1rem; width: 100%;">
+                  <span>{{ message }}</span>
+                </div>
+              {% endfor %}
+            {% endif %}
+          {% endwith %}
+
+          {% block content %}{% endblock %}
+        </section>
+      </main>
+
+    {% else %}
+      <!-- Public / Guest Layout (Landing & Auth pages) -->
+      <div style="width: 100%; min-height: 100vh; display: flex; flex-direction: column;">
+        <header style="background: #ffffff; border-bottom: 1px solid var(--border-color); padding: 0.75rem 2rem; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 50;">
+          <a href="/" style="display: flex; align-items: center; text-decoration: none;">
+            <img src="{{ url_for('static', filename='images/logo.svg') }}" alt="OnionGrade AI Logo" style="height: 42px;">
+          </a>
+          <div style="display: flex; align-items: center; gap: 1rem;">
+            <a href="{{ url_for('views.login_farmer') }}" class="btn btn-outline btn-sm">Farmer Login</a>
+            <a href="{{ url_for('views.login_officer') }}" class="btn btn-primary btn-sm">Officer Portal</a>
+          </div>
+        </header>
+
+        <main style="flex: 1;">
+          {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+              <div style="max-width: 800px; margin: 1rem auto; padding: 0 1rem;">
+                {% for category, message in messages %}
+                  <div class="toast {{ category }}" style="position: relative; margin-bottom: 0.5rem; width: 100%;">
+                    <span>{{ message }}</span>
+                  </div>
+                {% endfor %}
+              </div>
+            {% endif %}
+          {% endwith %}
+
+          {% block public_content %}{% endblock %}
+        </main>
+
+        <footer style="background: var(--bg-sidebar); color: #94a3b8; padding: 2rem 1.5rem; text-align: center; font-size: 0.85rem; border-top: 1px solid rgba(255,255,255,0.1);">
+          <div style="max-width: 1100px; margin: 0 auto; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem;">
+            <div style="text-align: left;">
+              <div style="font-weight: 700; color: #ffffff; font-size: 1.05rem;">OnionGrade AI</div>
+              <div>Smart India Hackathon Project: AI-Based Onion Quality Assessment & Digital Procurement</div>
+            </div>
+            <div>
+              Designed for APMC Mandis, Farmers, and Procurement Authorities.
+            </div>
+          </div>
+        </footer>
+      </div>
+    {% endif %}
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Main JavaScript -->
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block title %}OnionGrade AI - AI-Powered Onion Quality Assessment & Digital Procurement{% endblock %}
+
+{% block public_content %}
+<!-- Hero Section -->
+<section class="landing-hero">
+  <div style="max-width: 900px; margin: 0 auto;">
+    <div style="display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(255, 255, 255, 0.12); padding: 0.35rem 1rem; border-radius: var(--radius-full); font-size: 0.85rem; font-weight: 600; margin-bottom: 1.5rem; border: 1px solid rgba(255, 255, 255, 0.2);">
+      <span>🌾 Smart India Hackathon Initiative</span> • <span>Version 2.0 Production Ready</span>
+    </div>
+    <h1>AI-Powered Onion Quality Assessment</h1>
+    <p>Making onion procurement transparent, consistent, and data-driven across Mandis and procurement centers nationwide.</p>
+
+    <div class="hero-buttons">
+      <a href="{{ url_for('views.login_farmer') }}" class="btn btn-accent btn-lg" style="box-shadow: 0 4px 14px rgba(217, 119, 6, 0.4);">
+        🧑‍🌾 Farmer Portal & Reports
+      </a>
+      <a href="{{ url_for('views.login_officer') }}" class="btn btn-primary btn-lg" style="background: #ffffff; color: var(--primary-green); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);">
+        🏛️ Procurement Officer Portal
+      </a>
+    </div>
+
+    <!-- Quick Demo Credentials Hint -->
+    <div style="margin-top: 2rem; background: rgba(0,0,0,0.25); border-radius: var(--radius-md); padding: 0.75rem 1rem; display: inline-flex; gap: 1.5rem; font-size: 0.8rem; color: #a7f3d0; border: 1px solid rgba(255,255,255,0.1);">
+      <div><b>Farmer Demo:</b> 9876543210 / farmer123</div>
+      <div><b>Officer Demo:</b> OFF-2026-001 / officer123</div>
+    </div>
+  </div>
+</section>
+
+<!-- Problem vs Solution Section -->
+<section class="landing-section">
+  <div class="section-heading">
+    <h2>Bridging The Quality Gap in Onion Mandis</h2>
+    <p>Replacing subjective manual inspection with objective computer vision intelligence</p>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 2rem;">
+    <!-- Problem Card -->
+    <div style="background: #fff; border-radius: var(--radius-lg); padding: 2rem; border: 1px solid #fee2e2; box-shadow: var(--shadow-sm); border-top: 4px solid #ef4444;">
+      <h3 style="color: #b91c1c; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+        ⚠️ The Core Problem
+      </h3>
+      <ul style="list-style: none; display: flex; flex-direction: column; gap: 0.85rem; color: #4b5563; font-size: 0.95rem;">
+        <li style="display: flex; gap: 0.5rem;">❌ <b>Subjective Grading:</b> Visual quality varies wildly between different procurement officers and Mandis.</li>
+        <li style="display: flex; gap: 0.5rem;">❌ <b>Frequent Disputes:</b> Farmers often dispute arbitrary price cuts for minor surface defects.</li>
+        <li style="display: flex; gap: 0.5rem;">❌ <b>Lack of Audit Trail:</b> Paper slips are easily lost, manipulated, or lack verifiable photographic proof.</li>
+        <li style="display: flex; gap: 0.5rem;">❌ <b>Market Information Asymmetry:</b> Farmers lack real-time transparent Mandi rates during batch delivery.</li>
+      </ul>
+    </div>
+
+    <!-- Solution Card -->
+    <div style="background: #fff; border-radius: var(--radius-lg); padding: 2rem; border: 1px solid #bbf7d0; box-shadow: var(--shadow-sm); border-top: 4px solid var(--primary-green);">
+      <h3 style="color: var(--primary-green); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+        ✨ The OnionGrade AI Solution
+      </h3>
+      <ul style="list-style: none; display: flex; flex-direction: column; gap: 0.85rem; color: #374151; font-size: 0.95rem;">
+        <li style="display: flex; gap: 0.5rem;">✅ <b>Automated Detection:</b> YOLO11 locates every single onion in bulk batch photographs instantly.</li>
+        <li style="display: flex; gap: 0.5rem;">✅ <b>Four-Class Quality AI:</b> Deep CNN classifies Healthy, Damaged, Rotten, and Sprouted bulbs.</li>
+        <li style="display: flex; gap: 0.5rem;">✅ <b>Official Grading:</b> Standardized rules categorize onions into Grade A, URS, and Rejected counts.</li>
+        <li style="display: flex; gap: 0.5rem;">✅ <b>Certified Digital PDF:</b> Instant downloadable assessment certificates with annotated photos.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- How It Works Section -->
+<section style="background: #f1f5f9; padding: 4.5rem 1.5rem;">
+  <div style="max-width: 1100px; margin: 0 auto;">
+    <div class="section-heading">
+      <h2>Step-by-Step Procurement Workflow</h2>
+      <p>Seamless 8-step transparency from mandi arrival to digital payout verification</p>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1.25rem;">
+      <div class="feature-card">
+        <div style="font-size: 1.5rem; font-weight: 800; color: var(--primary-green); margin-bottom: 0.5rem;">01</div>
+        <h4 style="margin-bottom: 0.5rem;">Farmer Selection</h4>
+        <p style="font-size: 0.85rem; color: var(--text-muted);">Officer searches farmer by ID/Mobile or creates new farmer profile instantly.</p>
+      </div>
+
+      <div class="feature-card">
+        <div style="font-size: 1.5rem; font-weight: 800; color: var(--primary-green); margin-bottom: 0.5rem;">02</div>
+        <h4 style="margin-bottom: 0.5rem;">Image Capture</h4>
+        <p style="font-size: 0.85rem; color: var(--text-muted);">Batch sample image is uploaded via drag-and-drop or high-res camera feed.</p>
+      </div>
+
+      <div class="feature-card">
+        <div style="font-size: 1.5rem; font-weight: 800; color: var(--primary-green); margin-bottom: 0.5rem;">03</div>
+        <h4 style="margin-bottom: 0.5rem;">YOLO11 Detection</h4>
+        <p style="font-size: 0.85rem; color: var(--text-muted);">Advanced computer vision model isolates all visible onions with bounding boxes.</p>
+      </div>
+
+      <div class="feature-card">
+        <div style="font-size: 1.5rem; font-weight: 800; color: var(--primary-green); margin-bottom: 0.5rem;">04</div>
+        <h4 style="margin-bottom: 0.5rem;">Quality Classification</h4>
+        <p style="font-size: 0.85rem; color: var(--text-muted);">Each crop is analyzed for rot, sprouting, mechanical cut, or prime health.</p>
+      </div>
+
+      <div class="feature-card">
+        <div style="font-size: 1.5rem; font-weight: 800; color: var(--primary-green); margin-bottom: 0.5rem;">05</div>
+        <h4 style="margin-bottom: 0.5rem;">Officer Review</h4>
+        <p style="font-size: 0.85rem; color: var(--text-muted);">Officer inspects interactive charts, checks confidence scores, and confirms batch.</p>
+      </div>
+
+      <div class="feature-card">
+        <div style="font-size: 1.5rem; font-weight: 800; color: var(--primary-green); margin-bottom: 0.5rem;">06</div>
+        <h4 style="margin-bottom: 0.5rem;">Digital Certificate</h4>
+        <p style="font-size: 0.85rem; color: var(--text-muted);">ReportLab generates an official, tamper-proof quality assessment PDF report.</p>
+      </div>
+
+      <div class="feature-card">
+        <div style="font-size: 1.5rem; font-weight: 800; color: var(--primary-green); margin-bottom: 0.5rem;">07</div>
+        <h4 style="margin-bottom: 0.5rem;">Farmer Dashboard</h4>
+        <p style="font-size: 0.85rem; color: var(--text-muted);">Report instantly appears in the farmer's personal portal in real-time.</p>
+      </div>
+
+      <div class="feature-card">
+        <div style="font-size: 1.5rem; font-weight: 800; color: var(--primary-green); margin-bottom: 0.5rem;">08</div>
+        <h4 style="margin-bottom: 0.5rem;">PDF Download</h4>
+        <p style="font-size: 0.85rem; color: var(--text-muted);">Farmer downloads certified PDF with complete photographic audit evidence.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Live Mandi Rates Preview -->
+<section class="landing-section">
+  <div class="section-heading">
+    <h2>Current Onion APMC Mandi Rates</h2>
+    <p>Live benchmark prices from premier agricultural trading centers</p>
+  </div>
+
+  <div class="card">
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Market Mandi</th>
+            <th>District</th>
+            <th>Min Price</th>
+            <th>Max Price</th>
+            <th>Modal Price</th>
+            <th>Unit</th>
+            <th>Arrivals</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="landingMarketPriceBody">
+          <tr><td colspan="8" style="text-align: center; padding: 2rem;">Loading live Mandi prices...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Benefits Grid -->
+<section style="background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%); padding: 4.5rem 1.5rem;">
+  <div style="max-width: 1100px; margin: 0 auto;">
+    <div class="section-heading">
+      <h2>Why Agricultural Stakeholders Trust OnionGrade AI</h2>
+      <p>Measurable efficiency gains for both farmers and APMC procurement officials</p>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div style="font-size: 2rem; margin-bottom: 0.75rem;">⚖️</div>
+        <h4>Objective Quality Grading</h4>
+        <p style="color: var(--text-muted); font-size: 0.9rem;">Eliminates arbitrary deductions and human bias through deterministic AI scoring models.</p>
+      </div>
+
+      <div class="feature-card">
+        <div style="font-size: 2rem; margin-bottom: 0.75rem;">⏱️</div>
+        <h4>70% Faster Procurement</h4>
+        <p style="color: var(--text-muted); font-size: 0.9rem;">Automated detection cuts sample evaluation time from 15 minutes down to 3 seconds.</p>
+      </div>
+
+      <div class="feature-card">
+        <div style="font-size: 2rem; margin-bottom: 0.75rem;">📄</div>
+        <h4>Verifiable Audit Trail</h4>
+        <p style="color: var(--text-muted); font-size: 0.9rem;">High-resolution bounding box images permanently saved with unique Report IDs.</p>
+      </div>
+
+      <div class="feature-card">
+        <div style="font-size: 2rem; margin-bottom: 0.75rem;">🤝</div>
+        <h4>Dispute-Free Settlements</h4>
+        <p style="color: var(--text-muted); font-size: 0.9rem;">Clear distinction between Healthy Grade A, URS standard, and Rotten rejections.</p>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+  try {
+    const res = await fetch("/api/market/prices");
+    const data = await res.json();
+    if (data.success && data.prices) {
+      const tbody = document.getElementById("landingMarketPriceBody");
+      tbody.innerHTML = data.prices.slice(0, 5).map(p => `
+        <tr>
+          <td><b>${p.market_name}</b></td>
+          <td>${p.district}</td>
+          <td style="color: #64748b;">₹${p.min_price}</td>
+          <td style="color: #64748b;">₹${p.max_price}</td>
+          <td style="font-weight: 700; color: var(--primary-green);">₹${p.modal_price}</td>
+          <td>${p.unit}</td>
+          <td>${p.arrival_tons} Tons</td>
+          <td><span class="badge badge-success">${p.time_ago}</span></td>
+        </tr>
+      `).join("");
+    }
+  } catch(e) {
+    console.error("Market rate fetch error:", e);
+  }
+});
+</script>
+{% endblock %}

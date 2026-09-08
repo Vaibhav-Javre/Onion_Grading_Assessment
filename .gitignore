@@ -1,0 +1,15 @@
+.env
+__pycache__/
+*.pyc
+uploads/*
+!uploads/.gitkeep
+outputs/*
+!outputs/.gitkeep
+reports/pdf/*
+!reports/pdf/.gitkeep
+instance/*
+!instance/.gitkeep
+venv/
+.venv/
+*.log
+.DS_Store

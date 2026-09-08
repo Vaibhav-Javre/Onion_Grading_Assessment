@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}Procurement Report History - OnionGrade AI{% endblock %}
+{% block page_title %}Batch Evaluation & Quality Report History{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header" style="flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <h3>All Center Evaluations</h3>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.2rem;">
+        Permanent audit trail of AI evaluations and official PDF certificates
+      </p>
+    </div>
+
+    <!-- Filters -->
+    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+      <input type="text" id="officerReportSearch" class="form-control" placeholder="Search by Report ID, Farmer..." style="width: 250px; font-size: 0.85rem;">
+      <select id="officerGradeFilter" class="form-control" style="width: 150px; font-size: 0.85rem;">
+        <option value="">All Grades</option>
+        <option value="Grade A">Grade A</option>
+        <option value="URS">URS</option>
+        <option value="Rejected">Rejected</option>
+      </select>
+      <button type="button" onclick="loadOfficerReports()" class="btn btn-sm btn-secondary">Filter</button>
+    </div>
+  </div>
+
+  <div class="card-body" style="padding: 0;">
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Report ID</th>
+            <th>Date</th>
+            <th>Farmer Name & ID</th>
+            <th>Total Onions</th>
+            <th>Healthy</th>
+            <th>Damaged</th>
+            <th>Rotten</th>
+            <th>Sprouted</th>
+            <th>Grade A</th>
+            <th>URS</th>
+            <th>Rejected</th>
+            <th>Result</th>
+            <th>Est. Rate</th>
+            <th>Payout</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="officerReportsTableBody">
+          <tr><td colspan="16" style="text-align: center; padding: 2rem;">Loading reports...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadOfficerReports() {
+  const search = document.getElementById("officerReportSearch").value.trim();
+  const grade = document.getElementById("officerGradeFilter").value;
+  const tbody = document.getElementById("officerReportsTableBody");
+
+  try {
+    const res = await fetch(`/api/officer/reports?search=${encodeURIComponent(search)}&grade=${encodeURIComponent(grade)}`);
+    const data = await res.json();
+
+    if (!data.success || !data.reports || data.reports.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="16" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">No evaluation reports found.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = data.reports.map(r => {
+      const pe = r.price_estimation || {};
+      const estPrice = pe.estimated_price_per_quintal ? `₹${pe.estimated_price_per_quintal.toLocaleString('en-IN')}/q` : '--';
+      const payout = pe.total_payout && pe.total_payout > 0 ? `₹${pe.total_payout.toLocaleString('en-IN')}` : '--';
+
+      return `
+      <tr>
+        <td><b>${r.report_id || 'ONR-' + r.id}</b></td>
+        <td>${r.evaluation_date}</td>
+        <td>
+          <b>${r.farmer ? r.farmer.name : 'Farmer'}</b><br>
+          <small style="color: var(--primary-green);">${r.farmer ? r.farmer.farmer_id : ''}</small>
+        </td>
+        <td><b>${r.total_onions}</b></td>
+        <td><span style="color: var(--grade-a); font-weight: 600;">${r.healthy.count}</span></td>
+        <td><span style="color: var(--grade-urs); font-weight: 600;">${r.damaged.count}</span></td>
+        <td><span style="color: var(--grade-rej); font-weight: 600;">${r.rotten.count}</span></td>
+        <td><span style="color: #ea580c; font-weight: 600;">${r.sprouted.count}</span></td>
+        <td><span class="badge badge-grade-a">${r.grade_a.count}</span></td>
+        <td><span class="badge badge-grade-urs">${r.urs.count}</span></td>
+        <td><span class="badge badge-grade-rej">${r.rejected.count}</span></td>
+        <td><b>${r.overall_result}</b></td>
+        <td><b style="color: var(--primary-green);">${estPrice}</b></td>
+        <td><b style="color: var(--primary-dark);">${payout}</b></td>
+        <td><span class="badge badge-success">${r.status}</span></td>
+        <td style="white-space: nowrap;">
+          <a href="/officer/report/${r.report_id || r.id}" class="btn btn-sm btn-outline">View</a>
+          <a href="/reports/download/Onion_Report_${r.report_id || r.id}.pdf" download="Onion_Report_${r.report_id || r.id}.pdf" target="_blank" class="btn btn-sm btn-primary">PDF</a>
+        </td>
+      </tr>
+    `;
+    }).join("");
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="14" style="text-align: center; color: #ef4444; padding: 2rem;">Error loading reports.</td></tr>`;
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  loadOfficerReports();
+  document.getElementById("officerReportSearch").addEventListener("keyup", (e) => {
+    if (e.key === "Enter") loadOfficerReports();
+  });
+});
+</script>
+{% endblock %}

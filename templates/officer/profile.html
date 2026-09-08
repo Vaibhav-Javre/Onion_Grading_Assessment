@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Officer Profile - OnionGrade AI{% endblock %}
+{% block page_title %}Procurement Officer Profile{% endblock %}
+
+{% block content %}
+<div style="max-width: 800px; margin: 0 auto;">
+  <div class="card">
+    <div class="card-header">
+      <h3>🏛️ Officer Credentials & Assigned Center</h3>
+    </div>
+    <div class="card-body">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.25rem;">
+        <div>
+          <label class="form-label">Officer Name</label>
+          <input type="text" class="form-control" value="{{ user.name }}" readonly>
+        </div>
+        <div>
+          <label class="form-label">Officer ID</label>
+          <input type="text" class="form-control" value="{{ officer.officer_id }}" readonly style="font-weight: 700; color: var(--primary-green);">
+        </div>
+        <div>
+          <label class="form-label">Procurement Center</label>
+          <input type="text" class="form-control" value="{{ officer.procurement_center }}" readonly>
+        </div>
+        <div>
+          <label class="form-label">Center Location</label>
+          <input type="text" class="form-control" value="{{ officer.location }}" readonly>
+        </div>
+        <div>
+          <label class="form-label">Official Mobile</label>
+          <input type="text" class="form-control" value="{{ user.phone }}" readonly>
+        </div>
+        <div>
+          <label class="form-label">Official Email</label>
+          <input type="text" class="form-control" value="{{ user.email }}" readonly>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Change Password Form -->
+  <div class="card">
+    <div class="card-header">
+      <h3>🔒 Update Officer Password</h3>
+    </div>
+    <div class="card-body">
+      <form id="officerChangePasswordForm" style="max-width: 450px;">
+        <div class="form-group">
+          <label class="form-label" for="officerOldPw">Current Password</label>
+          <input type="password" id="officerOldPw" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="officerNewPw">New Password (min 6 chars)</label>
+          <input type="password" id="officerNewPw" class="form-control" minlength="6" required>
+        </div>
+        <button type="submit" id="officerChangePwBtn" class="btn btn-primary">
+          Update Security Password
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById("officerChangePasswordForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById("officerChangePwBtn");
+  btn.disabled = true;
+
+  try {
+    const res = await fetch("/api/auth/change-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        old_password: document.getElementById("officerOldPw").value,
+        new_password: document.getElementById("officerNewPw").value
+      })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(data.message, "success");
+      document.getElementById("officerChangePasswordForm").reset();
+    } else {
+      showToast(data.error || "Failed to update password", "error");
+    }
+  } catch(err) {
+    showToast("Network error: " + err.message, "error");
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Officer Portal Login - OnionGrade AI{% endblock %}
+
+{% block public_content %}
+<div style="min-height: 80vh; display: flex; align-items: center; justify-content: center; padding: 2rem 1rem;">
+  <div style="background: #ffffff; border-radius: var(--radius-lg); width: 100%; max-width: 440px; padding: 2.25rem; border: 1px solid var(--border-color); box-shadow: var(--shadow-lg);">
+    
+    <div style="text-align: center; margin-bottom: 2rem;">
+      <div style="width: 54px; height: 54px; background: #fef3c7; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.75rem; font-size: 1.75rem;">
+        🏛️
+      </div>
+      <h2 style="font-size: 1.6rem; color: var(--primary-dark);">Procurement Officer</h2>
+      <p style="color: var(--text-muted); font-size: 0.9rem;">Official Mandi grading & quality verification terminal</p>
+    </div>
+
+    <form id="officerLoginForm">
+      <div class="form-group">
+        <label class="form-label" for="officerIdentifier">Officer ID or Registered Email</label>
+        <input type="text" id="officerIdentifier" class="form-control" placeholder="e.g. OFF-2026-001" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="officerPassword">Password</label>
+        <div style="position: relative;">
+          <input type="password" id="officerPassword" class="form-control" placeholder="Enter officer password" required style="padding-right: 2.5rem;">
+          <button type="button" class="password-toggle-btn" data-target="officerPassword" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--text-muted);">
+            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+          </button>
+        </div>
+      </div>
+
+      <div id="officerLoginError" style="display: none; padding: 0.75rem; background: #fee2e2; border-left: 4px solid #ef4444; color: #b91c1c; font-size: 0.85rem; border-radius: var(--radius-sm); margin-bottom: 1rem;"></div>
+
+      <button type="submit" id="officerLoginBtn" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">
+        Authenticate & Enter Center
+      </button>
+
+      <!-- Demo Autofill Button -->
+      <button type="button" onclick="autofillOfficerDemo()" class="btn btn-outline btn-sm" style="width: 100%; margin-top: 0.75rem; font-size: 0.8rem;">
+        🔑 Fill Demo Officer Credentials
+      </button>
+    </form>
+
+    <div style="text-align: center; margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border-color); font-size: 0.875rem; color: var(--text-muted);">
+      Farmer Portal? <a href="{{ url_for('views.login_farmer') }}" style="font-weight: 600; color: var(--primary-light);">Farmer Login →</a>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function autofillOfficerDemo() {
+  document.getElementById("officerIdentifier").value = "OFF-2026-001";
+  document.getElementById("officerPassword").value = "officer123";
+}
+
+document.getElementById("officerLoginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const errBox = document.getElementById("officerLoginError");
+  errBox.style.display = "none";
+
+  const btn = document.getElementById("officerLoginBtn");
+  btn.disabled = true;
+  btn.textContent = "Verifying Officer Access...";
+
+  const payload = {
+    identifier: document.getElementById("officerIdentifier").value.trim(),
+    password: document.getElementById("officerPassword").value,
+    role: "officer"
+  };
+
+  try {
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+      showToast(data.message, "success");
+      window.location.href = data.redirect_url;
+    } else {
+      errBox.textContent = data.error || "Invalid credentials.";
+      errBox.style.display = "block";
+      btn.disabled = false;
+      btn.textContent = "Authenticate & Enter Center";
+    }
+  } catch (err) {
+    errBox.textContent = "Network error. Please try again.";
+    errBox.style.display = "block";
+    btn.disabled = false;
+    btn.textContent = "Authenticate & Enter Center";
+  }
+});
+</script>
+{% endblock %}

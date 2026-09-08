@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}Farmer Registration - OnionGrade AI{% endblock %}
+
+{% block public_content %}
+<div style="min-height: 80vh; display: flex; align-items: center; justify-content: center; padding: 2.5rem 1rem;">
+  <div style="background: #ffffff; border-radius: var(--radius-lg); width: 100%; max-width: 580px; padding: 2.25rem; border: 1px solid var(--border-color); box-shadow: var(--shadow-lg);">
+    
+    <div style="text-align: center; margin-bottom: 1.75rem;">
+      <h2 style="font-size: 1.6rem; color: var(--primary-dark);">Farmer Registration</h2>
+      <p style="color: var(--text-muted); font-size: 0.9rem;">Create your digital procurement profile to track onion batch reports</p>
+    </div>
+
+    <form id="farmerRegisterForm">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="regName">Full Name *</label>
+          <input type="text" id="regName" class="form-control" placeholder="e.g. Anand Kulkarni" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="regPhone">Mobile Number *</label>
+          <input type="tel" id="regPhone" class="form-control" placeholder="10-digit mobile" pattern="[0-9]{10}" required>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="regEmail">Email Address (Optional)</label>
+        <input type="email" id="regEmail" class="form-control" placeholder="e.g. anand@example.com">
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="regVillage">Village *</label>
+          <input type="text" id="regVillage" class="form-control" placeholder="e.g. Ozar" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="regTaluka">Taluka *</label>
+          <input type="text" id="regTaluka" class="form-control" placeholder="e.g. Niphad" required>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="regDistrict">District *</label>
+          <input type="text" id="regDistrict" class="form-control" placeholder="e.g. Nashik" value="Nashik" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="regState">State *</label>
+          <input type="text" id="regState" class="form-control" value="Maharashtra" required>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="regPassword">Password *</label>
+          <input type="password" id="regPassword" class="form-control" placeholder="Minimum 6 characters" minlength="6" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="regConfirmPassword">Confirm Password *</label>
+          <input type="password" id="regConfirmPassword" class="form-control" placeholder="Re-enter password" minlength="6" required>
+        </div>
+      </div>
+
+      <div id="registerErrorAlert" style="display: none; padding: 0.75rem; background: #fee2e2; border-left: 4px solid #ef4444; color: #b91c1c; font-size: 0.85rem; border-radius: var(--radius-sm); margin-bottom: 1rem;"></div>
+
+      <button type="submit" id="farmerRegisterBtn" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">
+        Complete Registration & Get Farmer ID
+      </button>
+    </form>
+
+    <div style="text-align: center; margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border-color); font-size: 0.875rem; color: var(--text-muted);">
+      Already have a Farmer ID? <a href="{{ url_for('views.login_farmer') }}" style="font-weight: 600; color: var(--primary-light);">Sign In Here</a>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById("farmerRegisterForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const errBox = document.getElementById("registerErrorAlert");
+  errBox.style.display = "none";
+
+  const pw = document.getElementById("regPassword").value;
+  const cpw = document.getElementById("regConfirmPassword").value;
+
+  if (pw !== cpw) {
+    errBox.textContent = "Passwords do not match.";
+    errBox.style.display = "block";
+    return;
+  }
+
+  const btn = document.getElementById("farmerRegisterBtn");
+  btn.disabled = true;
+  btn.textContent = "Generating Farmer Account...";
+
+  const payload = {
+    name: document.getElementById("regName").value.trim(),
+    phone: document.getElementById("regPhone").value.trim(),
+    email: document.getElementById("regEmail").value.trim() || null,
+    village: document.getElementById("regVillage").value.trim(),
+    taluka: document.getElementById("regTaluka").value.trim(),
+    district: document.getElementById("regDistrict").value.trim(),
+    state: document.getElementById("regState").value.trim(),
+    password: pw,
+    confirm_password: cpw
+  };
+
+  try {
+    const res = await fetch("/api/auth/register/farmer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+      showToast(data.message, "success");
+      window.location.href = data.redirect_url;
+    } else {
+      errBox.textContent = data.error || "Registration failed.";
+      errBox.style.display = "block";
+      btn.disabled = false;
+      btn.textContent = "Complete Registration & Get Farmer ID";
+    }
+  } catch (err) {
+    errBox.textContent = "Network error. Please try again.";
+    errBox.style.display = "block";
+    btn.disabled = false;
+    btn.textContent = "Complete Registration & Get Farmer ID";
+  }
+});
+</script>
+{% endblock %}

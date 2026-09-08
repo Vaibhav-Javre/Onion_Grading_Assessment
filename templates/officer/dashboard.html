@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+
+{% block title %}Officer Dashboard - OnionGrade AI{% endblock %}
+{% block page_title %}Procurement Operations Dashboard{% endblock %}
+
+{% block content %}
+<!-- Welcome & Procurement Center Header -->
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h1 style="font-size: 1.75rem; color: var(--primary-dark);">Officer {{ user.name }}</h1>
+    <p style="color: var(--text-muted); font-size: 0.95rem;">
+      Officer ID: <span class="badge badge-info">{{ officer.officer_id }}</span> • Center: <b>{{ officer.procurement_center }}</b> ({{ officer.location }})
+    </p>
+  </div>
+  <div>
+    <a href="{{ url_for('views.officer_evaluate') }}" class="btn btn-primary btn-lg" style="box-shadow: var(--shadow-md);">
+      📷 SCAN / EVALUATE ONIONS
+    </a>
+  </div>
+</div>
+
+<!-- 6 Metric Cards -->
+<div class="dashboard-grid">
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Today's Evaluations</span>
+      <span id="statTodayEvals" class="stat-value">--</span>
+      <span class="stat-sub">Batches evaluated today</span>
+    </div>
+    <div class="stat-icon blue">⚡</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Registered Farmers</span>
+      <span id="statTotalFarmers" class="stat-value">--</span>
+      <span class="stat-sub">Active in center</span>
+    </div>
+    <div class="stat-icon blue">🧑‍🌾</div>
+  </div>
+
+  <div class="stat-card grade-a">
+    <div class="stat-info">
+      <span class="stat-label">Grade A (Premium)</span>
+      <span id="statGradeA" class="stat-value" style="color: var(--grade-a);">--</span>
+      <span id="statGradeAPct" class="stat-sub">--% total healthy</span>
+    </div>
+    <div class="stat-icon green">✓</div>
+  </div>
+
+  <div class="stat-card urs">
+    <div class="stat-info">
+      <span class="stat-label">URS Standard</span>
+      <span id="statURS" class="stat-value" style="color: var(--grade-urs);">--</span>
+      <span id="statURSPct" class="stat-sub">--% total damaged</span>
+    </div>
+    <div class="stat-icon amber">⚠️</div>
+  </div>
+
+  <div class="stat-card rejected">
+    <div class="stat-info">
+      <span class="stat-label">Rejected Bulbs</span>
+      <span id="statRejected" class="stat-value" style="color: var(--grade-rej);">--</span>
+      <span id="statRejectedPct" class="stat-sub">Rotten + Sprouted</span>
+    </div>
+    <div class="stat-icon red">✕</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Total Onions Evaluated</span>
+      <span id="statTotalOnions" class="stat-value">--</span>
+      <span class="stat-sub">AI detections all time</span>
+    </div>
+    <div class="stat-icon green">🧅</div>
+  </div>
+</div>
+
+<!-- Quick Action Buttons Bar -->
+<div style="display: flex; gap: 1rem; margin-bottom: 1.75rem; flex-wrap: wrap;">
+  <a href="{{ url_for('views.officer_evaluate') }}" class="btn btn-primary" style="flex: 1; min-width: 200px;">
+    📷 SCAN / EVALUATE ONIONS
+  </a>
+  <a href="{{ url_for('views.officer_farmers') }}" class="btn btn-secondary" style="flex: 1; min-width: 180px;">
+    👥 FARMER RECORDS
+  </a>
+  <a href="{{ url_for('views.officer_reports') }}" class="btn btn-secondary" style="flex: 1; min-width: 180px;">
+    📑 ALL REPORTS
+  </a>
+  <a href="{{ url_for('views.officer_market') }}" class="btn btn-secondary" style="flex: 1; min-width: 180px;">
+    📈 MARKET PRICES
+  </a>
+</div>
+
+<!-- Trend Chart & Mandi Benchmark -->
+<div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+  <div class="card" style="margin-bottom: 0;">
+    <div class="card-header">
+      <h3>Weekly Evaluation Activity & Grade A Output</h3>
+    </div>
+    <div class="card-body">
+      <div style="height: 240px;">
+        <canvas id="officerWeeklyTrendChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom: 0;">
+    <div class="card-header">
+      <h3>Live Mandi Benchmark Rates</h3>
+      <a href="{{ url_for('views.officer_market') }}" style="font-size: 0.8rem;">View All →</a>
+    </div>
+    <div class="card-body" style="padding: 0;">
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Mandi</th>
+              <th>Modal Rate</th>
+              <th>Arrivals</th>
+            </tr>
+          </thead>
+          <tbody id="officerDashboardMarketRates">
+            <tr><td colspan="3" style="text-align: center; padding: 1.5rem;">Loading Mandi prices...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Recent Evaluations Table -->
+<div class="card">
+  <div class="card-header">
+    <h3>Recent Batch Evaluations</h3>
+    <a href="{{ url_for('views.officer_reports') }}" class="btn btn-sm btn-outline">View All History →</a>
+  </div>
+  <div class="card-body" style="padding: 0;">
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Report ID</th>
+            <th>Date</th>
+            <th>Farmer</th>
+            <th>Total Onions</th>
+            <th>Healthy</th>
+            <th>Damaged</th>
+            <th>Rotten</th>
+            <th>Sprouted</th>
+            <th>Grade A</th>
+            <th>URS</th>
+            <th>Rejected</th>
+            <th>Overall Result</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="officerRecentReportsBody">
+          <tr><td colspan="13" style="text-align: center; padding: 2rem;">Loading evaluations...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+let officerTrendChart = null;
+
+document.addEventListener("DOMContentLoaded", async () => {
+  try {
+    const res = await fetch("/api/officer/dashboard");
+    const data = await res.json();
+    if (data.success) {
+      const stats = data.stats;
+      document.getElementById("statTodayEvals").textContent = stats.today_evaluations;
+      document.getElementById("statTotalFarmers").textContent = stats.total_farmers;
+      document.getElementById("statGradeA").textContent = stats.grade_a_count;
+      document.getElementById("statGradeAPct").textContent = stats.grade_a_pct + "% healthy";
+      document.getElementById("statURS").textContent = stats.urs_count;
+      document.getElementById("statURSPct").textContent = stats.urs_pct + "% URS standard";
+      document.getElementById("statRejected").textContent = stats.rejected_count;
+      document.getElementById("statRejectedPct").textContent = stats.rejected_pct + "% rejected";
+      document.getElementById("statTotalOnions").textContent = stats.total_onions;
+
+      // Render Mandi benchmark table
+      if (data.market_prices) {
+        document.getElementById("officerDashboardMarketRates").innerHTML = data.market_prices.map(p => `
+          <tr>
+            <td><b>${p.market_name}</b><br><small style="color: var(--text-muted);">${p.district}</small></td>
+            <td style="font-weight: 700; color: var(--primary-green);">₹${p.modal_price}</td>
+            <td>${p.arrival_tons} T</td>
+          </tr>
+        `).join("");
+      }
+
+      // Render Weekly Trend Line Chart
+      if (data.trends) {
+        const ctx = document.getElementById("officerWeeklyTrendChart");
+        if (ctx) {
+          officerTrendChart = new Chart(ctx, {
+            type: "line",
+            data: {
+              labels: data.trends.labels,
+              datasets: [
+                {
+                  label: "Total Batches Evaluated",
+                  data: data.trends.evaluations,
+                  borderColor: "#0f5132",
+                  backgroundColor: "rgba(15, 81, 50, 0.1)",
+                  fill: true,
+                  tension: 0.3
+                },
+                {
+                  label: "Grade A Onions",
+                  data: data.trends.grade_a,
+                  borderColor: "#16a34a",
+                  tension: 0.3,
+                  borderDash: [4, 4]
+                }
+              ]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                y: { beginAtZero: true, grid: { color: "#f1f5f9" } },
+                x: { grid: { display: false } }
+              },
+              plugins: { legend: { position: "top", labels: { usePointStyle: true } } }
+            }
+          });
+        }
+      }
+
+      // Render Recent Evaluations
+      const tbody = document.getElementById("officerRecentReportsBody");
+      if (!data.recent_evaluations || data.recent_evaluations.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="13" style="text-align: center; padding: 2rem; color: var(--text-muted);">No evaluations recorded yet.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = data.recent_evaluations.map(r => `
+        <tr>
+          <td><b>${r.report_id || 'ONR-' + r.id}</b></td>
+          <td>${r.evaluation_date}</td>
+          <td>${r.farmer ? r.farmer.name : 'Farmer'}<br><small style="color: #64748b;">${r.farmer ? r.farmer.farmer_id : ''}</small></td>
+          <td><b>${r.total_onions}</b></td>
+          <td><span style="color: var(--grade-a); font-weight: 600;">${r.healthy.count}</span></td>
+          <td><span style="color: var(--grade-urs); font-weight: 600;">${r.damaged.count}</span></td>
+          <td><span style="color: var(--grade-rej); font-weight: 600;">${r.rotten.count}</span></td>
+          <td><span style="color: #ea580c; font-weight: 600;">${r.sprouted.count}</span></td>
+          <td><span class="badge badge-grade-a">${r.grade_a.count}</span></td>
+          <td><span class="badge badge-grade-urs">${r.urs.count}</span></td>
+          <td><span class="badge badge-grade-rej">${r.rejected.count}</span></td>
+          <td><b>${r.overall_result}</b></td>
+          <td style="white-space: nowrap;">
+            <a href="/officer/report/${r.report_id || r.id}" class="btn btn-sm btn-outline">View</a>
+            <a href="/reports/download/Onion_Report_${r.report_id || r.id}.pdf" download="Onion_Report_${r.report_id || r.id}.pdf" target="_blank" class="btn btn-sm btn-primary">PDF</a>
+          </td>
+        </tr>
+      `).join("");
+    }
+  } catch(e) {
+    console.error("Dashboard load error:", e);
+  }
+});
+</script>
+{% endblock %}

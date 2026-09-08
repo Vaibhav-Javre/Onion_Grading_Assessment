@@ -1,0 +1,640 @@
+{% extends "base.html" %}
+
+{% block title %}New Onion Evaluation - OnionGrade AI{% endblock %}
+{% block page_title %}New Batch Onion Quality Evaluation{% endblock %}
+
+{% block content %}
+<!-- Workflow Step Indicator -->
+<div class="workflow-steps">
+  <div class="workflow-step active" id="step1Indicator">
+    <div class="step-circle">1</div>
+    <span class="step-label">Select Farmer</span>
+  </div>
+  <div style="flex: 1; height: 2px; background: #e2e8f0; margin: 0 1rem; margin-bottom: 1.25rem;"></div>
+  <div class="workflow-step" id="step2Indicator">
+    <div class="step-circle">2</div>
+    <span class="step-label">Upload Image & AI</span>
+  </div>
+  <div style="flex: 1; height: 2px; background: #e2e8f0; margin: 0 1rem; margin-bottom: 1.25rem;"></div>
+  <div class="workflow-step" id="step3Indicator">
+    <div class="step-circle">3</div>
+    <span class="step-label">Review & Confirm</span>
+  </div>
+</div>
+
+<!-- =========================================================
+     WORKFLOW WIZARD (Steps 1 & 2)
+     ========================================================= -->
+<div id="evaluationWizard">
+  <!-- STEP 1: Select / Search Farmer -->
+  <div class="card">
+    <div class="card-header">
+      <h3>Step 1: Select Farmer for Batch Procurement</h3>
+      <button type="button" class="btn btn-sm btn-outline" onclick="openAddFarmerModal()">
+        + Add New Farmer
+      </button>
+    </div>
+    <div class="card-body">
+      <!-- Search Input -->
+      <div id="farmerSearchSection">
+        <div class="form-group">
+          <label class="form-label" for="farmerSearchInput">Search Registered Farmer</label>
+          <input type="text" id="farmerSearchInput" class="form-control" placeholder="Type farmer name, mobile number, or Farmer ID (e.g. FMR-2026-0001)..." autocomplete="off">
+        </div>
+        <div id="farmerSearchResults" style="max-height: 220px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: #ffffff;">
+          <!-- Populated by evaluate.js -->
+        </div>
+      </div>
+
+      <!-- Selected Farmer Card Display -->
+      <div id="selectedFarmerCard" style="display: none; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-md); padding: 1.25rem;">
+        <input type="hidden" id="selectedFarmerId">
+        <div id="selectedFarmerDetails"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 2: Upload Onion Images -->
+  <div class="card" id="imageUploadSection">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+      <div>
+        <h3 style="margin-bottom: 0.2rem;">Step 2: Upload or Capture Onion Batch Photos (Multi-Angle)</h3>
+        <span style="font-size: 0.8rem; color: var(--text-muted);">Upload files from computer or click camera to snap live sample angles</span>
+      </div>
+      <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <button type="button" class="btn btn-primary" onclick="openLiveCameraModal(event)" style="box-shadow: 0 2px 8px rgba(15, 81, 50, 0.25); display: inline-flex; align-items: center; gap: 0.4rem;">
+          📷 Take Photo with Camera
+        </button>
+        <span style="font-size: 0.8rem; color: var(--text-muted);">JPG, PNG, WEBP</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <input type="file" id="onionImageInput" accept="image/jpeg,image/png,image/webp,image/jpg" multiple style="display: none;">
+      
+      <div id="uploadDropzone" class="upload-dropzone" style="cursor: pointer;">
+        <div id="dropzonePrompt">
+          <svg class="upload-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+          <h4 style="margin-bottom: 0.5rem; color: var(--primary-dark);">Drag & drop batch photographs here (1 or multiple)</h4>
+          <p style="color: var(--text-muted); font-size: 0.875rem;">or choose an option below to add images from different angles</p>
+          <div style="margin-top: 1rem; display: flex; justify-content: center; gap: 0.75rem; flex-wrap: wrap;">
+            <button type="button" class="btn btn-primary" onclick="openLiveCameraModal(event)" style="display: inline-flex; align-items: center; gap: 0.35rem;">
+              📷 Start Camera & Click Photo
+            </button>
+            <button type="button" class="btn btn-outline" onclick="triggerAddMoreImages(event)" style="display: inline-flex; align-items: center; gap: 0.35rem;">
+              📁 Browse Files from Computer
+            </button>
+          </div>
+          <div style="margin-top: 0.75rem; display: inline-block; padding: 0.25rem 0.75rem; background: #e0f2fe; color: #0369a1; border-radius: 999px; font-size: 0.75rem; font-weight: 600;">
+            ✓ Upload or capture 1 to any number of photos from multiple angles
+          </div>
+        </div>
+
+        <!-- Selected Multi-Image Gallery Grid -->
+        <div id="uploadGalleryContainer" style="display: none; width: 100%; text-align: left;" onclick="event.stopPropagation()">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+            <div style="font-weight: 700; color: var(--primary-dark); font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;">
+              <span>📸 Selected Batch Images:</span>
+              <span id="imageCountBadge" class="badge badge-success" style="font-size: 0.8rem;">0 Images</span>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+              <button type="button" class="btn btn-sm btn-primary" onclick="openLiveCameraModal(event)">📷 Snap Photo</button>
+              <button type="button" class="btn btn-sm btn-outline" onclick="triggerAddMoreImages(event)">+ Add More Files</button>
+              <button type="button" class="btn btn-sm btn-secondary" onclick="clearAllSelectedImages(event)">Clear All</button>
+            </div>
+          </div>
+          <div id="imagesPreviewGrid" class="multi-image-grid">
+            <!-- Populated dynamically by evaluate.js -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Test Sample Images Bar -->
+      <div style="margin-top: 1.25rem; padding: 0.85rem; background: #f8fafc; border-radius: var(--radius-md); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+        <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">
+          🧪 Quick Demo Test Samples (Click to add multiple angles):
+        </div>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <button type="button" class="btn btn-sm btn-outline" onclick="loadSampleImage('onion1.jpg')">+ Sample 1</button>
+          <button type="button" class="btn btn-sm btn-outline" onclick="loadSampleImage('onion2.jpg')">+ Sample 2</button>
+          <button type="button" class="btn btn-sm btn-outline" onclick="loadSampleImage('onion3.jpg')">+ Sample 3</button>
+          <button type="button" class="btn btn-sm btn-outline" onclick="loadSampleImage('onion4.webp')">+ Sample 4</button>
+          <button type="button" class="btn btn-sm btn-outline" onclick="loadSampleImage('onion5.jpg')">+ Sample 5</button>
+          <button type="button" class="btn btn-sm btn-primary" onclick="loadAllSampleImages()" style="box-shadow: var(--shadow-sm);">⚡ Add All 5 Samples (Multi-Angle Batch)</button>
+        </div>
+      </div>
+
+      <!-- Analyze CTA Button -->
+      <div id="analyzeButtonArea" style="margin-top: 1.5rem; text-align: center; display: none;">
+        <button type="button" id="runEvaluationBtn" onclick="startEvaluation()" class="btn btn-primary btn-lg" style="box-shadow: 0 4px 12px rgba(15, 81, 50, 0.3);">
+          ⚡ Run Multi-Angle AI Quality Evaluation Pipeline
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================
+     STEP 4: AI REVIEW & CONFIRMATION SCREEN
+     ========================================================= -->
+<div id="evaluationReviewSection" style="display: none;">
+  <!-- Header Alert -->
+  <div style="background: #ecfdf5; border-left: 5px solid var(--grade-a); padding: 1.25rem; border-radius: var(--radius-md); margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        <h3 style="color: var(--primary-dark); font-size: 1.25rem; margin-bottom: 0.25rem;">
+          Batch AI Evaluation Complete ✓
+        </h3>
+        <span id="resTotalImagesBadge" class="badge badge-info" style="font-size: 0.85rem; font-weight: 700;">
+          1 Image Evaluated
+        </span>
+      </div>
+      <p style="color: #065f46; font-size: 0.9rem;">
+        Farmer: <b id="resFarmerName">--</b> (<span id="resFarmerId">--</span>) • Location: <span id="resFarmerLocation">--</span>
+      </p>
+    </div>
+    <div style="display: flex; gap: 0.75rem;">
+      <button type="button" onclick="resetEvaluation()" class="btn btn-secondary">
+        ↻ Re-evaluate
+      </button>
+      <button type="button" id="confirmReportBtn" onclick="confirmAndSubmitReport()" class="btn btn-primary btn-lg" style="box-shadow: var(--shadow-md);">
+        ✓ Confirm & Submit Report
+      </button>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="dashboard-grid">
+    <div class="stat-card">
+      <div class="stat-info">
+        <span class="stat-label">Total Onions Detected</span>
+        <span id="resTotalOnions" class="stat-value">--</span>
+        <span id="resTotalOnionsSub" class="stat-sub">Across all uploaded images</span>
+      </div>
+      <div class="stat-icon blue">🧅</div>
+    </div>
+
+    <div class="stat-card grade-a">
+      <div class="stat-info">
+        <span class="stat-label">Grade A (Healthy)</span>
+        <span id="resGradeA" class="stat-value" style="color: var(--grade-a);">--</span>
+        <span id="resGradeAPct" class="stat-sub">--% of total</span>
+      </div>
+      <div class="stat-icon green">✓</div>
+    </div>
+
+    <div class="stat-card urs">
+      <div class="stat-info">
+        <span class="stat-label">URS (Damaged)</span>
+        <span id="resURS" class="stat-value" style="color: var(--grade-urs);">--</span>
+        <span id="resURSPct" class="stat-sub">--% of total</span>
+      </div>
+      <div class="stat-icon amber">⚠️</div>
+    </div>
+
+    <div class="stat-card rejected">
+      <div class="stat-info">
+        <span class="stat-label">Rejected (Rotten+Sprouted)</span>
+        <span id="resRejected" class="stat-value" style="color: var(--grade-rej);">--</span>
+        <span id="resRejectedPct" class="stat-sub">--% of total</span>
+      </div>
+      <div class="stat-icon red">✕</div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       PRICE ESTIMATION & FARMER PAYOUT ENGINE (Lasalgaon Mandi data.gov.in)
+       ========================================================= -->
+  <div class="card" style="margin-bottom: 1.5rem; border: 1.5px solid #a7f3d0; background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%); box-shadow: var(--shadow-md);">
+    <div class="card-header" style="background: #ecfdf5; border-bottom: 1px solid #d1fae5; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+      <div style="display: flex; align-items: center; gap: 0.6rem;">
+        <span style="font-size: 1.35rem;">💰</span>
+        <div>
+          <h3 style="color: var(--primary-dark); font-size: 1.15rem; margin: 0;">
+            Government Mandi Price Estimation & Procurement Payout Engine
+          </h3>
+          <p style="margin: 0; font-size: 0.8rem; color: #065f46;">
+            Benchmark: <b id="priceEngineMandiName">Lasalgaon APMC Mandi</b> • Reference: <b>Modal Price</b> • Government Data Portal: <b>data.gov.in</b>
+          </p>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <span id="priceEngineApiBadge" class="badge badge-success" style="font-size: 0.8rem;">
+          ● data.gov.in Synced
+        </span>
+        <span id="priceEngineDateBadge" class="badge badge-info" style="font-size: 0.8rem;">
+          Date: --
+        </span>
+      </div>
+    </div>
+
+    <div class="card-body" style="padding: 1.25rem;">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; align-items: start;">
+        
+        <!-- Column 1: Mandi Modal Benchmark -->
+        <div style="background: white; border: 1px solid #e5e7eb; border-radius: var(--radius-md); padding: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">
+              1. Mandi Modal Reference Price
+            </span>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Per Quintal</span>
+          </div>
+
+          <div style="display: flex; align-items: baseline; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <span id="displayModalPrice" style="font-size: 2rem; font-weight: 800; color: var(--primary-dark);">₹--</span>
+            <span style="font-size: 0.9rem; color: var(--text-muted);">/ Quintal</span>
+          </div>
+
+          <div style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 0.75rem;">
+            <div><b>Commodity:</b> Onion (Garwa/Red)</div>
+            <div><b>Mandi:</b> <span id="displayMandiLocation">Lasalgaon APMC, Nashik</span></div>
+            <div><b>API Source:</b> <span id="displayApiSource">data.gov.in (Agmarknet)</span></div>
+          </div>
+
+          <!-- Officer Reference Override (In case physical board price changed) -->
+          <div style="border-top: 1px dashed #e5e7eb; padding-top: 0.5rem; margin-top: 0.5rem;">
+            <label for="inputModalPriceOverride" style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 0.25rem;">
+              Mandi Modal Reference (₹/Quintal):
+            </label>
+            <div style="display: flex; gap: 0.5rem;">
+              <input type="number" id="inputModalPriceOverride" step="10" min="100" class="form-control" style="font-size: 0.85rem; padding: 0.35rem 0.6rem;" placeholder="Modal Rate ₹" oninput="onModalPriceChange()">
+              <button type="button" class="btn btn-sm btn-outline" onclick="resetModalPriceToLive()" title="Reset to live API rate">Reset</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Column 2: Quality Score & Adjusted Price -->
+        <div style="background: white; border: 1px solid #e5e7eb; border-radius: var(--radius-md); padding: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">
+              2. Quality Score & Price
+            </span>
+            <span class="badge badge-info" style="font-size: 0.75rem;">Formula Applied</span>
+          </div>
+
+          <!-- Price Factors Breakdown -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.4rem; text-align: center; margin-bottom: 0.75rem;">
+            <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-sm); padding: 0.35rem 0.25rem;">
+              <div style="font-size: 0.7rem; color: #166534; font-weight: 600;">Grade A (100%)</div>
+              <div id="factorGradeAPct" style="font-weight: 800; font-size: 0.95rem; color: #15803d;">--%</div>
+            </div>
+            <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: var(--radius-sm); padding: 0.35rem 0.25rem;">
+              <div style="font-size: 0.7rem; color: #92400e; font-weight: 600;">URS (80%)</div>
+              <div id="factorURSPct" style="font-weight: 800; font-size: 0.95rem; color: #b45309;">--%</div>
+            </div>
+            <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: var(--radius-sm); padding: 0.35rem 0.25rem;">
+              <div style="font-size: 0.7rem; color: #991b1b; font-weight: 600;">Rejected (0%)</div>
+              <div id="factorRejectedPct" style="font-weight: 800; font-size: 0.95rem; color: #dc2626;">--%</div>
+            </div>
+          </div>
+
+          <!-- Formula Step -->
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: var(--radius-sm); padding: 0.5rem; font-size: 0.75rem; color: var(--text-dark); margin-bottom: 0.75rem;">
+            <div style="font-weight: 600; color: var(--primary-dark); margin-bottom: 0.15rem;">
+              Quality Score = (Grade A% × 1.0) + (URS% × 0.8) + (Rejected% × 0)
+            </div>
+            <div id="formulaCalculationText" style="font-family: monospace; color: #065f46; font-size: 0.8rem;">
+              --
+            </div>
+          </div>
+
+          <!-- Quality Score & Estimated Price Box -->
+          <div style="display: flex; justify-content: space-between; align-items: center; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: var(--radius-sm); padding: 0.6rem 0.75rem;">
+            <div>
+              <div style="font-size: 0.75rem; color: #065f46; font-weight: 600;">Quality Score</div>
+              <div id="displayQualityScore" style="font-size: 1.35rem; font-weight: 800; color: #047857;">--%</div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 0.75rem; color: #065f46; font-weight: 600;">Estimated Rate</div>
+              <div id="displayEstimatedPrice" style="font-size: 1.35rem; font-weight: 800; color: var(--primary-dark);">₹-- /q</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Column 3: Quantity Input & Final Payout -->
+        <div style="background: white; border: 1.5px solid #34d399; border-radius: var(--radius-md); padding: 1rem; display: flex; flex-direction: column; justify-content: space-between;">
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <span style="font-size: 0.85rem; font-weight: 700; color: var(--primary-dark); text-transform: uppercase; letter-spacing: 0.5px;">
+                3. Farmer's Batch Quantity
+              </span>
+              <span id="quantityKgDisplay" class="badge badge-info" style="font-size: 0.75rem;">0 kg</span>
+            </div>
+
+            <div style="margin-bottom: 0.5rem;">
+              <label for="inputQuantityQuintals" style="font-size: 0.8rem; font-weight: 600; color: var(--text-dark); display: block; margin-bottom: 0.25rem;">
+                Enter Quantity in Quintals:
+              </label>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <input type="number" id="inputQuantityQuintals" min="0" step="0.1" class="form-control" style="font-size: 1.15rem; font-weight: 700; padding: 0.4rem 0.75rem; border: 1.5px solid #10b981;" placeholder="e.g. 25.0" oninput="onQuantityChange()">
+                <span style="font-weight: 700; font-size: 0.95rem; color: var(--text-dark);">Quintals</span>
+              </div>
+            </div>
+
+            <!-- Quick Presets -->
+            <div style="display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.85rem;">
+              <button type="button" class="btn btn-sm btn-outline" style="font-size: 0.75rem; padding: 0.2rem 0.45rem;" onclick="setQuantityPreset(10)">10 q</button>
+              <button type="button" class="btn btn-sm btn-outline" style="font-size: 0.75rem; padding: 0.2rem 0.45rem;" onclick="setQuantityPreset(25)">25 q</button>
+              <button type="button" class="btn btn-sm btn-outline" style="font-size: 0.75rem; padding: 0.2rem 0.45rem;" onclick="setQuantityPreset(50)">50 q</button>
+              <button type="button" class="btn btn-sm btn-outline" style="font-size: 0.75rem; padding: 0.2rem 0.45rem;" onclick="setQuantityPreset(100)">100 q</button>
+            </div>
+          </div>
+
+          <!-- Total Farmer Payout Highlight Card -->
+          <div style="background: linear-gradient(135deg, #064e3b 0%, #047857 100%); color: white; border-radius: var(--radius-sm); padding: 0.85rem 1rem; text-align: center; box-shadow: var(--shadow-sm);">
+            <div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.75px; color: #a7f3d0; font-weight: 700;">
+              Total Estimated Farmer Payout
+            </div>
+            <div id="displayFinalPayout" style="font-size: 2rem; font-weight: 900; color: #ffffff; margin: 0.25rem 0; letter-spacing: -0.5px;">
+              ₹0.00
+            </div>
+            <div style="font-size: 0.75rem; color: #d1fae5;">
+              = <span id="payoutCalcQty">0.00 q</span> × <span id="payoutCalcRate">₹0.00 /q</span>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Visual Results: Annotated Image & Charts -->
+  <div class="results-grid" style="margin-bottom: 1.5rem;">
+    <!-- Annotated Image Display with Multi-Angle Tabs -->
+    <div class="card">
+      <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+        <h3>AI Annotated Detections</h3>
+        <span id="currentAngleHeaderLabel" style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);"></span>
+      </div>
+      <div class="card-body" style="padding: 1rem;">
+        <!-- Angle Tabs Bar (shown when multiple images exist) -->
+        <div id="angleTabsBar" class="angle-tabs-bar" style="display: none;">
+          <!-- Populated by evaluate.js -->
+        </div>
+
+        <div class="annotated-viewer">
+          <img id="resAnnotatedImage" src="" alt="Annotated Evaluation Image">
+        </div>
+        <div style="margin-top: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center; font-size: 0.8rem;">
+          <span style="color: var(--grade-a); font-weight: 600;">■ Healthy (Grade A)</span>
+          <span style="color: var(--grade-urs); font-weight: 600;">■ Damaged (URS)</span>
+          <span style="color: var(--grade-rej); font-weight: 600;">■ Rotten (Rejected)</span>
+          <span style="color: #ea580c; font-weight: 600;">■ Sprouted (Rejected)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts & Quality Breakdown -->
+    <div class="card">
+      <div class="card-header">
+        <h3>Batch Quality & Grade Distribution</h3>
+      </div>
+      <div class="card-body">
+        <!-- Donut Chart -->
+        <div style="height: 220px; margin-bottom: 1.5rem;">
+          <canvas id="reviewQualityDonutChart"></canvas>
+        </div>
+
+        <div class="quality-stat-row healthy">
+          <div><b>Healthy (Grade A)</b></div>
+          <div id="resHealthyCount">--</div>
+        </div>
+        <div class="quality-stat-row damaged">
+          <div><b>Damaged (URS)</b></div>
+          <div id="resDamagedCount">--</div>
+        </div>
+        <div class="quality-stat-row rotten">
+          <div><b>Rotten (Rejected)</b></div>
+          <div id="resRottenCount">--</div>
+        </div>
+        <div class="quality-stat-row sprouted">
+          <div><b>Sprouted (Rejected)</b></div>
+          <div id="resSproutedCount">--</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quality Summary & Grade Bar Chart -->
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+    <div class="card" style="margin-bottom: 0;">
+      <div class="card-header">
+        <h3>Procurement Grade Distribution</h3>
+      </div>
+      <div class="card-body">
+        <div style="height: 210px;">
+          <canvas id="reviewGradeBarChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 0;">
+      <div class="card-header">
+        <h3>Consolidated AI Evaluation Summary</h3>
+      </div>
+      <div class="card-body">
+        <p id="resQualitySummaryText" style="font-size: 1rem; line-height: 1.6; color: var(--text-dark);">
+          --
+        </p>
+        <div style="margin-top: 1.25rem; font-size: 0.8rem; color: var(--text-muted); font-style: italic;">
+          AI Assessment: Generated automatically by OnionGrade AI by consolidating all evaluated sample photographs. Officer verification required before permanent procurement entry.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Individual Detections Table -->
+  <div class="card">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+      <h3>Individual Detected Onions Breakdown (All Images)</h3>
+      <span id="tableDetectionsCountBadge" class="badge badge-info">0 Detections</span>
+    </div>
+    <div class="card-body" style="padding: 0; max-height: 320px; overflow-y: auto;">
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Onion #</th>
+              <th>Sample / Angle</th>
+              <th>AI Quality Class</th>
+              <th>Classification Conf</th>
+              <th>Detection Conf</th>
+              <th>Bounding Box [x1, y1, x2, y2]</th>
+            </tr>
+          </thead>
+          <tbody id="detectionsTableBody">
+            <!-- Populated by evaluate.js -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================
+     MODALS: AI PROCESSING PROGRESS & SUCCESS
+     ========================================================= -->
+
+<!-- AI Animated Progress Modal -->
+<div id="aiProgressModal" class="ai-progress-modal">
+  <div class="ai-progress-card">
+    <div class="spinner-pulse"></div>
+    <h3 style="font-size: 1.35rem; color: var(--primary-dark); margin-bottom: 0.5rem;">
+      Analyzing Onion Batch
+    </h3>
+    <div class="progress-bar-bg">
+      <div id="aiProgressBarFill" class="progress-bar-fill"></div>
+    </div>
+    <div id="aiProgressStepText" class="progress-step-text">
+      Uploading image...
+    </div>
+    <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.75rem;">
+      Running YOLO11 object detector & TensorFlow quality classifier
+    </p>
+  </div>
+</div>
+
+<!-- Success Confirmation Modal -->
+<div id="reportSuccessModal" class="ai-progress-modal">
+  <div class="ai-progress-card" style="max-width: 520px; text-align: left;">
+    <div style="text-align: center; margin-bottom: 1.25rem;">
+      <div style="width: 54px; height: 54px; background: #dcfce7; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 1.75rem; color: #15803d;">
+        ✓
+      </div>
+      <h3 style="font-size: 1.4rem; color: var(--primary-dark); margin-top: 0.5rem;">
+        Procurement Report Published!
+      </h3>
+      <p style="color: var(--text-muted); font-size: 0.9rem;">
+        Official Report ID: <b id="confirmedReportId" style="color: var(--primary-green);">--</b>
+      </p>
+    </div>
+
+    <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem; margin-bottom: 1.25rem; font-size: 0.875rem;">
+      <p style="margin-bottom: 0.5rem;">
+        ✅ <b>Database Entry Saved:</b> Farmer can now view this report immediately on their dashboard.
+      </p>
+      <p>
+        ✅ <b>Official PDF Generated:</b> Certified ReportLab PDF with embedded annotated image is ready for download.
+      </p>
+    </div>
+
+    <div style="display: flex; gap: 0.75rem; justify-content: flex-end; flex-wrap: wrap;">
+      <a href="{{ url_for('views.officer_reports') }}" class="btn btn-secondary">
+        Go to Reports History
+      </a>
+      <a id="pdfViewLink" href="javascript:void(0)" target="_blank" class="btn btn-outline">
+        👁️ View PDF in Browser
+      </a>
+      <a id="pdfDownloadLink" href="javascript:void(0)" class="btn btn-primary">
+        📥 Download Certified PDF (.pdf)
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Add New Farmer Quick Modal -->
+<div id="addFarmerModal" class="ai-progress-modal">
+  <div class="ai-progress-card" style="max-width: 520px; text-align: left;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+      <h3 style="font-size: 1.3rem; color: var(--primary-dark); margin: 0;">Quick Register Farmer</h3>
+      <button type="button" onclick="closeAddFarmerModal()" style="background: none; border: none; font-size: 1.25rem; cursor: pointer;">✕</button>
+    </div>
+
+    <form id="addFarmerForm">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="newFarmerName">Full Name *</label>
+          <input type="text" id="newFarmerName" class="form-control" placeholder="e.g. Sunil Jadhav" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="newFarmerPhone">Mobile Number *</label>
+          <input type="tel" id="newFarmerPhone" class="form-control" placeholder="10-digit mobile" pattern="[0-9]{10}" required>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="newFarmerVillage">Village *</label>
+          <input type="text" id="newFarmerVillage" class="form-control" placeholder="e.g. Lasalgaon" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="newFarmerTaluka">Taluka *</label>
+          <input type="text" id="newFarmerTaluka" class="form-control" placeholder="e.g. Niphad" required>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="newFarmerDistrict">District *</label>
+          <input type="text" id="newFarmerDistrict" class="form-control" value="Nashik" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="newFarmerState">State *</label>
+          <input type="text" id="newFarmerState" class="form-control" value="Maharashtra" required>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1rem;">
+        <button type="button" onclick="closeAddFarmerModal()" class="btn btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-primary">Register & Select Farmer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- =========================================================
+     LIVE CAMERA CAPTURE MODAL
+     ========================================================= -->
+<div id="liveCameraModal" class="camera-modal-container">
+  <div class="camera-card">
+    <div class="camera-header">
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <span style="font-size: 1.25rem;">📷</span>
+        <div>
+          <h3 style="margin: 0; font-size: 1.1rem; color: #ffffff;">Live Camera: Snap Onion Batch Angle</h3>
+          <span style="font-size: 0.75rem; color: #94a3b8;">Capture as many angles or sample bulbs as needed</span>
+        </div>
+      </div>
+      <button type="button" onclick="closeLiveCameraModal()" style="background: none; border: none; font-size: 1.35rem; color: #94a3b8; cursor: pointer; padding: 4px 8px;">✕</button>
+    </div>
+
+    <div class="camera-viewport">
+      <video id="cameraVideo" class="camera-video" autoplay playsinline muted></video>
+      <canvas id="cameraCanvas" style="display: none;"></canvas>
+      <div id="cameraFlash" class="camera-flash-effect"></div>
+      <div class="camera-viewfinder-overlay">
+        <span class="camera-guide-text">Position sample bulbs within viewfinder & click 📸</span>
+      </div>
+    </div>
+
+    <div class="camera-controls-bar">
+      <!-- Live Captured Thumbnails Strip -->
+      <div id="cameraCapturedStrip" class="camera-strip" style="display: none;">
+        <!-- Filled dynamically when photos are snapped -->
+      </div>
+
+      <div class="camera-actions-row">
+        <button type="button" id="switchCameraBtn" class="btn btn-sm btn-outline" style="color: #cbd5e1; border-color: #475569;" onclick="toggleCameraFacingMode()">
+          🔄 Flip Camera
+        </button>
+
+        <button type="button" id="snapPhotoBtn" class="camera-snap-btn" title="Click to Capture Angle Photo" onclick="capturePhotoFromCamera()">
+          📸
+        </button>
+
+        <button type="button" class="btn btn-sm btn-primary" onclick="closeLiveCameraModal()" style="box-shadow: var(--shadow-sm);">
+          ✓ Finish & Use Photos (<span id="modalCapturedCount">0</span>)
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Native mobile camera capture input fallback -->
+<input type="file" id="mobileCameraInput" accept="image/*" capture="environment" style="display: none;">
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script src="{{ url_for('static', filename='js/evaluate.js') }}"></script>
+{% endblock %}

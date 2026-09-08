@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}Live Mandi Rates - OnionGrade AI{% endblock %}
+{% block page_title %}Mandi Market Price Intelligence{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header" style="flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <h3>Wholesale Onion Market Price Feed</h3>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.2rem;">
+        Real-time APMC Mandi rates across Maharashtra and major national trading hubs
+      </p>
+    </div>
+
+    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+      <select id="officerDistrictSelect" class="form-control" style="width: 170px; font-size: 0.85rem;">
+        <option value="">All Districts</option>
+      </select>
+      <input type="text" id="officerMarketSearch" class="form-control" placeholder="Search Mandi..." style="width: 180px; font-size: 0.85rem;">
+      <button type="button" onclick="loadOfficerMarketRates()" class="btn btn-sm btn-primary">Refresh Feed</button>
+    </div>
+  </div>
+
+  <div class="card-body" style="padding: 0;">
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Market Mandi</th>
+            <th>District</th>
+            <th>State</th>
+            <th>Commodity</th>
+            <th>Variety</th>
+            <th>Min Price</th>
+            <th>Max Price</th>
+            <th>Modal Price</th>
+            <th>Unit</th>
+            <th>Arrivals</th>
+            <th>Last Updated</th>
+          </tr>
+        </thead>
+        <tbody id="officerMarketRatesBody">
+          <tr><td colspan="11" style="text-align: center; padding: 2rem;">Loading live market prices...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 7-Day Trend Chart -->
+<div class="card">
+  <div class="card-header">
+    <h3>7-Day Mandi Wholesale Price Trend (₹/Quintal)</h3>
+  </div>
+  <div class="card-body">
+    <div style="height: 280px;">
+      <canvas id="officerMarketTrendChart"></canvas>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+let officerPriceChart = null;
+
+async function initOfficerDistricts() {
+  try {
+    const res = await fetch("/api/market/districts");
+    const data = await res.json();
+    if (data.success && data.districts) {
+      const select = document.getElementById("officerDistrictSelect");
+      data.districts.forEach(d => {
+        const opt = document.createElement("option");
+        opt.value = d;
+        opt.textContent = d;
+        select.appendChild(opt);
+      });
+    }
+  } catch(e) { console.error(e); }
+}
+
+async function loadOfficerMarketRates() {
+  const dist = document.getElementById("officerDistrictSelect").value;
+  const mandi = document.getElementById("officerMarketSearch").value.trim();
+  const tbody = document.getElementById("officerMarketRatesBody");
+
+  try {
+    const res = await fetch(`/api/market/prices?district=${encodeURIComponent(dist)}&market=${encodeURIComponent(mandi)}`);
+    const data = await res.json();
+
+    if (!data.success || !data.prices || data.prices.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; padding: 2rem; color: var(--text-muted);">Market price service temporarily unavailable.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = data.prices.map(p => `
+      <tr>
+        <td><b>${p.market_name}</b></td>
+        <td>${p.district}</td>
+        <td>${p.state}</td>
+        <td>${p.commodity}</td>
+        <td>${p.variety}</td>
+        <td style="color: #64748b;">₹${p.min_price}</td>
+        <td style="color: #64748b;">₹${p.max_price}</td>
+        <td style="font-weight: 700; color: var(--primary-green); font-size: 1.05rem;">₹${p.modal_price}</td>
+        <td>${p.unit}</td>
+        <td>${p.arrival_tons} Tons</td>
+        <td><span class="badge badge-success">${p.time_ago}</span></td>
+      </tr>
+    `).join("");
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; color: #ef4444; padding: 2rem;">Market price service temporarily unavailable.</td></tr>`;
+  }
+}
+
+async function loadOfficerTrendChart() {
+  try {
+    const res = await fetch("/api/market/trends");
+    const data = await res.json();
+    if (data.success && data.trends) {
+      if (officerPriceChart) officerPriceChart.destroy();
+      officerPriceChart = createPriceTrendChart("officerMarketTrendChart", data.trends);
+    }
+  } catch(e) { console.error(e); }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  initOfficerDistricts();
+  loadOfficerMarketRates();
+  loadOfficerTrendChart();
+  document.getElementById("officerDistrictSelect").addEventListener("change", loadOfficerMarketRates);
+  document.getElementById("officerMarketSearch").addEventListener("keyup", (e) => {
+    if (e.key === "Enter") loadOfficerMarketRates();
+  });
+});
+</script>
+{% endblock %}

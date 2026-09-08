@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 60" width="240" height="60" fill="none">
+  <defs>
+    <linearGradient id="bulbGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="50%" stop-color="#d97706" />
+      <stop offset="100%" stop-color="#b45309" />
+    </linearGradient>
+    <linearGradient id="leafGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+    <linearGradient id="aiGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#047857" />
+      <stop offset="100%" stop-color="#10b981" />
+    </linearGradient>
+  </defs>
+
+  <!-- Onion Bulb Icon -->
+  <g transform="translate(6, 6)">
+    <!-- Shield / Base container -->
+    <rect x="0" y="0" width="48" height="48" rx="12" fill="#0f5132" />
+    
+    <!-- Bulb body -->
+    <path d="M24 13 C15 13, 10 21, 10 29 C10 37, 16 42, 24 42 C32 42, 38 37, 38 29 C38 21, 33 13, 24 13 Z" fill="url(#bulbGrad)" />
+    
+    <!-- Bulb inner layered skin lines -->
+    <path d="M24 17 C19 17, 15 23, 15 29 C15 35, 19 39, 24 39 C29 39, 33 35, 33 29 C33 23, 29 17, 24 17 Z" stroke="#ffffff" stroke-opacity="0.35" stroke-width="1.2" fill="none" />
+    <path d="M24 20 C21 20, 19 24, 19 29 C19 33, 21 36, 24 36 C27 36, 29 33, 29 29 C29 24, 27 20, 24 20 Z" stroke="#ffffff" stroke-opacity="0.5" stroke-width="1" fill="none" />
+
+    <!-- Sprout / Leaves -->
+    <path d="M24 14 C23 9, 20 6, 17 5 C19 9, 21 11, 23 13 Z" fill="url(#leafGrad)" />
+    <path d="M24 14 C25 8, 29 5, 32 4 C30 8, 27 11, 25 13 Z" fill="url(#leafGrad)" />
+    <path d="M24 13 C24 7, 24 4, 24 3 C25 6, 25 9, 24 13 Z" stroke="#10b981" stroke-width="2" stroke-linecap="round" />
+
+    <!-- AI Circuit Nodes -->
+    <circle cx="13" cy="22" r="2.2" fill="#34d399" />
+    <circle cx="35" cy="22" r="2.2" fill="#34d399" />
+    <circle cx="24" cy="40" r="2" fill="#34d399" />
+    <path d="M13 22 L18 26 M35 22 L30 26" stroke="#34d399" stroke-width="1.2" stroke-dasharray="1.5 1.5" />
+    
+    <!-- Center check / verification star -->
+    <path d="M21.5 29.5 L23.5 31.5 L27 26.5" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+
+  <!-- Typography: OnionGrade AI -->
+  <text x="64" y="32" font-family="'Outfit', 'Inter', -apple-system, sans-serif" font-size="21" font-weight="800" fill="#0f5132" letter-spacing="-0.5">OnionGrade</text>
+  <rect x="182" y="16" width="34" height="20" rx="6" fill="url(#aiGrad)" />
+  <text x="199" y="30" font-family="'Outfit', 'Inter', sans-serif" font-size="12" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">AI</text>
+  
+  <!-- Subtitle -->
+  <text x="65" y="46" font-family="'Inter', sans-serif" font-size="8.5" font-weight="600" fill="#6b7280" letter-spacing="0.8">DIGITAL ONION PROCUREMENT</text>
+</svg>
