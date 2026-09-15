@@ -1,7 +1,10 @@
 import os
+
 import cv2
 import numpy as np
+
 from config import Config
+
 
 class OnionClassifier:
     _instance = None
@@ -10,7 +13,7 @@ class OnionClassifier:
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(OnionClassifier, cls).__new__(cls)
+            cls._instance = super().__new__(cls)
             cls._instance._load_model()
         return cls._instance
 
@@ -34,39 +37,68 @@ class OnionClassifier:
             print(f"[OnionClassifier] Model file not found at {model_path} or mock mode enabled.")
             self._model = None
 
-    def classify(self, crop_bgr, conf_threshold=None):
+    def preprocess(self, crop_bgr):
+        crop_rgb = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2RGB)
+        resized = cv2.resize(crop_rgb, (self._input_size, self._input_size))
+        return resized.astype("float32")
+
+    def classify_batch(self, crops_bgr, conf_threshold=None):
         """
-        Classifies an onion crop BGR image.
-        Returns: (class_name: str, confidence: float, all_probabilities: dict)
+        Classifies a list of onion crop BGR images using batch inference.
+        Returns: list of tuples: [(class_name: str, confidence: float, all_probabilities: dict), ...]
         """
         if conf_threshold is None:
             conf_threshold = Config.CLASSIFIER_CONFIDENCE_THRESHOLD
 
         classes = Config.QUALITY_CLASSES
 
-        if self._model is not None and crop_bgr.size > 0:
+        if not crops_bgr:
+            return []
+
+        if self._model is not None:
             try:
-                crop_rgb = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2RGB)
-                resized = cv2.resize(crop_rgb, (self._input_size, self._input_size))
-                img_float = resized.astype("float32")
-                input_tensor = np.expand_dims(img_float, axis=0)
+                # 3. Preprocess all crops
+                preprocessed = [self.preprocess(crop) for crop in crops_bgr]
+                # 4. Stack them into a NumPy batch
+                batch = np.stack(preprocessed, axis=0)
 
-                predictions = self._model.predict(input_tensor, verbose=0)[0]
-                class_idx = int(np.argmax(predictions))
-                conf = float(predictions[class_idx])
+                # 5. Run TensorFlow/Keras classifier ONCE
+                classifier_model = self._model
+                predictions = classifier_model.predict(
+                    batch,
+                    batch_size=32,
+                    verbose=0
+                )
 
-                prob_dict = {classes[i]: float(predictions[i]) for i in range(len(classes))}
+                # 6. Map predictions to class information
+                results = []
+                for pred in predictions:
+                    class_idx = int(np.argmax(pred))
+                    conf = float(pred[class_idx])
+                    prob_dict = {classes[i]: float(pred[i]) for i in range(len(classes))}
 
-                class_name = classes[class_idx]
-                if conf < conf_threshold:
-                    class_name = "Uncertain"
+                    class_name = classes[class_idx]
+                    if conf < conf_threshold:
+                        class_name = "Uncertain"
 
-                return class_name, conf, prob_dict
+                    results.append((class_name, conf, prob_dict))
+
+                return results
             except Exception as e:
-                print(f"[OnionClassifier] Error during inference: {e}")
+                print(f"[OnionClassifier] Error during batch inference: {e}")
 
         # Intelligent color/texture fallback if model is unavailable
-        return self._fallback_classify(crop_bgr)
+        return [self._fallback_classify(crop) for crop in crops_bgr]
+
+    def classify(self, crop_bgr, conf_threshold=None):
+        """
+        Classifies an onion crop BGR image.
+        Returns: (class_name: str, confidence: float, all_probabilities: dict)
+        """
+        if crop_bgr is None or crop_bgr.size == 0:
+            return "Uncertain", 0.50, {}
+        results = self.classify_batch([crop_bgr], conf_threshold=conf_threshold)
+        return results[0] if results else ("Uncertain", 0.50, {})
 
     def _fallback_classify(self, crop_bgr):
         """

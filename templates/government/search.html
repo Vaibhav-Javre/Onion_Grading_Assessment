@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block title %}Omni-Search & Verification Hub - Government Portal{% endblock %}
+{% block page_title %}Government Omni-Search & Verification Hub{% endblock %}
+
+{% block content %}
+<div style="max-width: 900px; margin: 0 auto;">
+  <div style="text-align: center; margin-bottom: 2rem;">
+    <div style="display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 56px; background: #e0f2fe; color: #0369a1; border-radius: 50%; font-size: 1.75rem; margin-bottom: 0.75rem;">
+      🔍
+    </div>
+    <h1 style="font-size: 1.85rem; color: #0b2545;">Central Verification & Search</h1>
+    <p style="color: var(--text-muted); font-size: 0.95rem;">
+      Instant lookup across Farmer IDs, Transaction Numbers, Report Codes, Officers, and Procurement Mandis.
+    </p>
+  </div>
+
+  <!-- Search Input Bar -->
+  <div class="card" style="padding: 1.5rem; margin-bottom: 2rem; box-shadow: var(--shadow-md);">
+    <form id="omniSearchForm" onsubmit="handleOmniSearch(event)">
+      <div style="display: flex; gap: 0.75rem;">
+        <input type="text" id="omniQueryInput" class="form-control" placeholder="Search by Farmer ID (FMR-...), TXN-..., ONR-..., Mobile, Officer, District..." style="font-size: 1.05rem; padding: 0.75rem 1rem;" autofocus>
+        <button type="submit" class="btn btn-primary" style="padding: 0 1.5rem; font-weight: 700; white-space: nowrap;">
+          Search Records
+        </button>
+      </div>
+      <div style="margin-top: 0.75rem; font-size: 0.8rem; color: #64748b; display: flex; gap: 1rem; flex-wrap: wrap;">
+        <span>Try searching:</span>
+        <a href="#" onclick="searchPreset('FMR-2026-0001'); return false;" style="color: #0284c7; text-decoration: underline;">FMR-2026-0001</a>
+        <a href="#" onclick="searchPreset('ONR-2026-001089'); return false;" style="color: #0284c7; text-decoration: underline;">ONR-2026-001089</a>
+        <a href="#" onclick="searchPreset('OFF-2026-001'); return false;" style="color: #0284c7; text-decoration: underline;">OFF-2026-001</a>
+        <a href="#" onclick="searchPreset('Nashik'); return false;" style="color: #0284c7; text-decoration: underline;">Nashik</a>
+        <a href="#" onclick="searchPreset('9876543210'); return false;" style="color: #0284c7; text-decoration: underline;">9876543210</a>
+      </div>
+    </form>
+  </div>
+
+  <!-- Results Section -->
+  <div id="searchResultsArea" style="display: none;">
+    <div style="font-size: 0.9rem; color: #64748b; margin-bottom: 1.25rem;">
+      Search results for "<b id="queryDisplay"></b>":
+    </div>
+
+    <!-- Farmers Category -->
+    <div id="catFarmers" class="card" style="margin-bottom: 1.5rem; display: none;">
+      <div class="card-header" style="background: #f8fafc;">
+        <h3 style="font-size: 1.05rem; color: #0b2545;">🧑‍🌾 Matched Farmers</h3>
+      </div>
+      <div id="listFarmers" style="padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem;"></div>
+    </div>
+
+    <!-- Transactions Category -->
+    <div id="catTransactions" class="card" style="margin-bottom: 1.5rem; display: none;">
+      <div class="card-header" style="background: #f8fafc;">
+        <h3 style="font-size: 1.05rem; color: #0b2545;">💳 Procurement Transactions</h3>
+      </div>
+      <div id="listTransactions" style="padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem;"></div>
+    </div>
+
+    <!-- Reports Category -->
+    <div id="catReports" class="card" style="margin-bottom: 1.5rem; display: none;">
+      <div class="card-header" style="background: #f8fafc;">
+        <h3 style="font-size: 1.05rem; color: #0b2545;">📑 Quality Assessment Reports</h3>
+      </div>
+      <div id="listReports" style="padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem;"></div>
+    </div>
+
+    <!-- Officers Category -->
+    <div id="catOfficers" class="card" style="margin-bottom: 1.5rem; display: none;">
+      <div class="card-header" style="background: #f8fafc;">
+        <h3 style="font-size: 1.05rem; color: #0b2545;">👮‍♂️ Mandi Officers</h3>
+      </div>
+      <div id="listOfficers" style="padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem;"></div>
+    </div>
+
+    <!-- Zero Results State -->
+    <div id="zeroResultsState" class="card" style="text-align: center; padding: 3rem; display: none;">
+      <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📭</div>
+      <h3 style="color: #64748b;">No matching records found</h3>
+      <p style="color: #94a3b8; font-size: 0.9rem;">Try searching with a broader keyword, valid mobile number, or ID prefix.</p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function searchPreset(val) {
+  document.getElementById("omniQueryInput").value = val;
+  handleOmniSearch(new Event('submit'));
+}
+
+async function handleOmniSearch(e) {
+  if (e) e.preventDefault();
+  const q = document.getElementById("omniQueryInput").value.trim();
+  if (!q || q.length < 2) {
+    showToast("Please enter at least 2 characters to search.", "warning");
+    return;
+  }
+
+  document.getElementById("queryDisplay").textContent = q;
+  document.getElementById("searchResultsArea").style.display = "block";
+
+  try {
+    const res = await fetch(`/api/government/search?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    if (!data.success) {
+      showToast("Search failed.", "error");
+      return;
+    }
+
+    const r = data.results;
+    let anyResults = false;
+
+    // Farmers
+    const catF = document.getElementById("catFarmers");
+    const listF = document.getElementById("listFarmers");
+    if (r.farmers && r.farmers.length > 0) {
+      anyResults = true;
+      catF.style.display = "block";
+      listF.innerHTML = r.farmers.map(f => `
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 0.5rem;">
+          <div>
+            <b>${f.name}</b> <span class="badge badge-info" style="font-family: monospace;">${f.farmer_id}</span>
+            <div style="font-size: 0.8rem; color: #64748b;">Mobile: ${f.phone || 'N/A'} • Location: ${f.village}, ${f.district}</div>
+          </div>
+          <a href="${f.link}" class="btn btn-sm btn-outline">View in Registry →</a>
+        </div>
+      `).join("");
+    } else {
+      catF.style.display = "none";
+    }
+
+    // Transactions
+    const catT = document.getElementById("catTransactions");
+    const listT = document.getElementById("listTransactions");
+    if (r.transactions && r.transactions.length > 0) {
+      anyResults = true;
+      catT.style.display = "block";
+      listT.innerHTML = r.transactions.map(t => `
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 0.5rem;">
+          <div>
+            <span class="badge" style="background: #e0f2fe; color: #0369a1; font-family: monospace; font-weight: 700;">${t.transaction_id}</span>
+            <span style="font-size: 0.85rem; margin-left: 0.5rem;">Farmer: <b>${t.farmer_name}</b> • Date: ${t.date}</span>
+            <div style="font-size: 0.8rem; color: #16a34a; font-weight: 600;">Result: ${t.final_result} • Payout: ₹${t.total_payout.toLocaleString()}</div>
+          </div>
+          <a href="${t.link}" class="btn btn-sm btn-outline">View Ledger →</a>
+        </div>
+      `).join("");
+    } else {
+      catT.style.display = "none";
+    }
+
+    // Reports
+    const catR = document.getElementById("catReports");
+    const listR = document.getElementById("listReports");
+    if (r.reports && r.reports.length > 0) {
+      anyResults = true;
+      catR.style.display = "block";
+      listR.innerHTML = r.reports.map(rep => `
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 0.5rem;">
+          <div>
+            <b>${rep.report_id}</b> <span class="badge ${rep.overall_result.includes('Grade A') ? 'badge-grade-a' : 'badge-grade-urs'}">${rep.overall_result}</span>
+            <div style="font-size: 0.8rem; color: #64748b;">Farmer: ${rep.farmer_name} (${rep.farmer_id}) • Total Bulbs: ${rep.total_onions}</div>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <a href="${rep.link}" class="btn btn-sm btn-outline">Details</a>
+            <a href="${rep.pdf_url}" target="_blank" class="btn btn-sm btn-primary">PDF</a>
+          </div>
+        </div>
+      `).join("");
+    } else {
+      catR.style.display = "none";
+    }
+
+    // Officers
+    const catO = document.getElementById("catOfficers");
+    const listO = document.getElementById("listOfficers");
+    if (r.officers && r.officers.length > 0) {
+      anyResults = true;
+      catO.style.display = "block";
+      listO.innerHTML = r.officers.map(o => `
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 0.5rem;">
+          <div>
+            <b>${o.name}</b> <span class="badge" style="background: #fef3c7; color: #92400e; font-family: monospace;">${o.officer_id}</span>
+            <div style="font-size: 0.8rem; color: #64748b;">Procurement Center: ${o.procurement_center} (${o.location})</div>
+          </div>
+          <a href="${o.link}" class="btn btn-sm btn-outline">View Officer →</a>
+        </div>
+      `).join("");
+    } else {
+      catO.style.display = "none";
+    }
+
+    document.getElementById("zeroResultsState").style.display = anyResults ? "none" : "block";
+
+  } catch (err) {
+    console.error("Search error:", err);
+    showToast("Error executing search.", "error");
+  }
+}
+</script>
+{% endblock %}

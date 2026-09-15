@@ -1,17 +1,20 @@
 import os
-import sys
-from flask import Flask, render_template, jsonify, session
-from config import Config
-from backend.database.db import db, init_db
+
+from flask import Flask, render_template, session
+
+from backend.ai.classifier import OnionClassifier
+from backend.ai.detector import OnionDetector
+from backend.database.db import init_db
 from backend.routes.auth import auth_bp
 from backend.routes.farmer import farmer_bp
+from backend.routes.government import government_bp
+from backend.routes.market import market_bp
 from backend.routes.officer import officer_bp
 from backend.routes.reports import reports_bp
-from backend.routes.market import market_bp
 from backend.routes.views import views_bp
 from backend.utils.seed_data import seed_demo_data
-from backend.ai.detector import OnionDetector
-from backend.ai.classifier import OnionClassifier
+from config import Config
+
 
 def create_app():
     app = Flask(__name__, template_folder="templates", static_folder="static")
@@ -33,6 +36,7 @@ def create_app():
     app.register_blueprint(officer_bp)
     app.register_blueprint(reports_bp)
     app.register_blueprint(market_bp)
+    app.register_blueprint(government_bp)
 
     # Register Jinja Template Filters
     @app.template_filter("basename")
@@ -86,5 +90,5 @@ def create_app():
 app = create_app()
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", "5000"))
     app.run(host="0.0.0.0", port=port, debug=True, use_reloader=False)

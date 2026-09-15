@@ -1,10 +1,8 @@
-from flask import Blueprint, jsonify, request, session, abort
-from backend.models.user import User
-from backend.models.farmer import FarmerProfile
+from flask import Blueprint, jsonify, request
+
 from backend.models.evaluation import Evaluation
-from backend.models.market import MarketPrice
 from backend.services.market_price_service import MarketPriceService
-from backend.utils.auth_helpers import login_required, role_required, get_current_user
+from backend.utils.auth_helpers import get_current_user, login_required, role_required
 
 farmer_bp = Blueprint("farmer_bp", __name__, url_prefix="/api/farmer")
 

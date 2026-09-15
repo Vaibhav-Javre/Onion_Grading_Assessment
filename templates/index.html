@@ -12,19 +12,23 @@
     <h1>AI-Powered Onion Quality Assessment</h1>
     <p>Making onion procurement transparent, consistent, and data-driven across Mandis and procurement centers nationwide.</p>
 
-    <div class="hero-buttons">
+    <div class="hero-buttons" style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
       <a href="{{ url_for('views.login_farmer') }}" class="btn btn-accent btn-lg" style="box-shadow: 0 4px 14px rgba(217, 119, 6, 0.4);">
         🧑‍🌾 Farmer Portal & Reports
       </a>
       <a href="{{ url_for('views.login_officer') }}" class="btn btn-primary btn-lg" style="background: #ffffff; color: var(--primary-green); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);">
         🏛️ Procurement Officer Portal
       </a>
+      <a href="{{ url_for('views.login_government') }}" class="btn btn-lg" style="background: #0b2545; color: #ffffff; border: 1px solid #1e3a8a; box-shadow: 0 4px 14px rgba(11, 37, 69, 0.3);">
+        🇮🇳 Government Portal
+      </a>
     </div>
 
     <!-- Quick Demo Credentials Hint -->
-    <div style="margin-top: 2rem; background: rgba(0,0,0,0.25); border-radius: var(--radius-md); padding: 0.75rem 1rem; display: inline-flex; gap: 1.5rem; font-size: 0.8rem; color: #a7f3d0; border: 1px solid rgba(255,255,255,0.1);">
-      <div><b>Farmer Demo:</b> 9876543210 / farmer123</div>
-      <div><b>Officer Demo:</b> OFF-2026-001 / officer123</div>
+    <div style="margin-top: 2rem; background: rgba(0,0,0,0.25); border-radius: var(--radius-md); padding: 0.75rem 1rem; display: inline-flex; gap: 1.5rem; font-size: 0.8rem; color: #a7f3d0; border: 1px solid rgba(255,255,255,0.1); flex-wrap: wrap; justify-content: center;">
+      <div><b>Farmer:</b> 9876543210 / farmer123</div>
+      <div><b>Officer:</b> OFF-2026-001 / officer123</div>
+      <div><b>Government Admin:</b> admin@agri.gov.in / GovAdmin@2026</div>
     </div>
   </div>
 </section>

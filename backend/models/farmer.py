@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
+
 from backend.database.db import db
+
 
 class FarmerProfile(db.Model):
     __tablename__ = "farmer_profiles"

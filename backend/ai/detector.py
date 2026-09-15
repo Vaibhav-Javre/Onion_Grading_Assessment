@@ -1,7 +1,9 @@
 import os
+
 import cv2
-import numpy as np
+
 from config import Config
+
 
 class OnionDetector:
     _instance = None
@@ -9,7 +11,7 @@ class OnionDetector:
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(OnionDetector, cls).__new__(cls)
+            cls._instance = super().__new__(cls)
             cls._instance._load_model()
         return cls._instance
 
@@ -21,6 +23,15 @@ class OnionDetector:
                 from ultralytics import YOLO
                 self._model = YOLO(model_path)
                 print(f"[OnionDetector] YOLO model loaded successfully! Classes: {self._model.names}")
+                # Warmup inference once so first live inference has no cold-start latency
+                try:
+                    import numpy as np
+                    warmup_sz = getattr(Config, "YOLO_IMGSZ", 640)
+                    dummy = np.zeros((warmup_sz, warmup_sz, 3), dtype=np.uint8)
+                    self._model.predict(source=dummy, imgsz=warmup_sz, verbose=False)
+                    print(f"[OnionDetector] YOLO model warmed up at imgsz={warmup_sz}.")
+                except Exception as we:
+                    print(f"[OnionDetector] Warmup note: {we}")
             except Exception as e:
                 print(f"[OnionDetector] Warning: Failed to load YOLO model ({e}). Fallback mode active.")
                 self._model = None
@@ -28,13 +39,15 @@ class OnionDetector:
             print(f"[OnionDetector] Model file not found at {model_path} or mock mode enabled.")
             self._model = None
 
-    def detect(self, image_np, conf_threshold=None):
+    def detect(self, image_np, conf_threshold=None, imgsz=None):
         """
         Detects onions in a BGR numpy image.
         Returns: list of dicts: [{'box': [x1, y1, x2, y2], 'confidence': float}]
         """
         if conf_threshold is None:
             conf_threshold = Config.YOLO_CONFIDENCE_THRESHOLD
+        if imgsz is None:
+            imgsz = getattr(Config, "YOLO_IMGSZ", 640)
 
         h, w = image_np.shape[:2]
         detections = []
@@ -44,6 +57,7 @@ class OnionDetector:
                 results = self._model.predict(
                     source=image_np,
                     conf=conf_threshold,
+                    imgsz=imgsz,
                     verbose=False
                 )
                 for box in results[0].boxes:

@@ -7,7 +7,7 @@ def init_db(app):
     db.init_app(app)
     with app.app_context():
         # Import models so SQLAlchemy metadata registers all tables
-        from backend.models import user, farmer, officer, evaluation, report, market
+        import backend.models  # noqa: F401
         db.create_all()
         try:
             res_eval = db.session.execute(text("PRAGMA table_info(evaluations)")).fetchall()

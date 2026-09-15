@@ -1,8 +1,9 @@
-from flask import Blueprint, request, jsonify, session, redirect, url_for
+from flask import Blueprint, jsonify, redirect, request, session
+
 from backend.database.db import db
-from backend.models.user import User
 from backend.models.farmer import FarmerProfile
 from backend.models.officer import OfficerProfile
+from backend.models.user import User
 from backend.utils.auth_helpers import generate_farmer_id, get_current_user
 
 auth_bp = Blueprint("auth_bp", __name__, url_prefix="/api/auth")
@@ -77,7 +78,7 @@ def register_farmer():
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": f"Registration failed: {str(e)}"}), 500
+        return jsonify({"success": False, "error": f"Registration failed: {e!s}"}), 500
 
 
 @auth_bp.route("/login", methods=["POST"])
@@ -113,7 +114,12 @@ def login():
                 (User.email == identifier) | (User.phone == identifier)
             ).filter_by(role="officer").first()
 
-    if not user or not user.check_password(password) or user.role != expected_role:
+    elif expected_role in ("government", "admin"):
+        user = User.query.filter(
+            (User.email == identifier) | (User.phone == identifier)
+        ).filter(User.role.in_(["government", "admin"])).first()
+
+    if not user or not user.check_password(password) or (user.role != expected_role and not (expected_role in ("government", "admin") and user.role in ("government", "admin"))):
         return jsonify({"success": False, "error": "Invalid credentials or unauthorized role."}), 401
 
     # Login successful -> setup session
@@ -121,6 +127,8 @@ def login():
     session["user_id"] = user.id
     session["user_name"] = user.name
     session["user_role"] = user.role
+
+    from backend.utils.audit_helpers import record_audit_log
 
     redirect_url = "/farmer/dashboard"
     if user.role == "farmer" and user.farmer_profile:
@@ -131,6 +139,15 @@ def login():
         session["profile_id"] = user.officer_profile.id
         session["officer_id"] = user.officer_profile.officer_id
         redirect_url = "/officer/dashboard"
+    elif user.role in ("government", "admin"):
+        redirect_url = "/government/dashboard"
+        record_audit_log(
+            action="GOVERNMENT_LOGIN",
+            entity_type="auth",
+            entity_id=str(user.id),
+            details={"email": user.email, "name": user.name},
+            user=user
+        )
 
     return jsonify({
         "success": True,
@@ -142,6 +159,16 @@ def login():
 
 @auth_bp.route("/logout", methods=["POST", "GET"])
 def logout():
+    from backend.utils.audit_helpers import record_audit_log
+    user_id = session.get("user_id")
+    role = session.get("user_role")
+    if user_id:
+        record_audit_log(
+            action="USER_LOGOUT",
+            entity_type="auth",
+            entity_id=str(user_id),
+            details={"role": role}
+        )
     session.clear()
     accept_header = request.headers.get("Accept", "")
     is_ajax = request.is_json or (request.headers.get("X-Requested-With") == "XMLHttpRequest") or ("application/json" in accept_header and "text/html" not in accept_header)

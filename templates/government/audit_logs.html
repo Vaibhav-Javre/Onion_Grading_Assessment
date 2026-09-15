@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}Audit Trail & Compliance - Government Portal{% endblock %}
+{% block page_title %}Official Compliance & Cryptographic Audit Trail{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h1 style="font-size: 1.65rem; color: #0b2545;">System Compliance & Immutable Audit Log</h1>
+    <p style="color: var(--text-muted); font-size: 0.9rem;">
+      Tamper-evident audit ledger capturing user logins, AI evaluations, transaction commitments, and document accesses.
+    </p>
+  </div>
+  <div>
+    <button onclick="fetchAuditLogs()" class="btn btn-sm btn-outline">
+      🔄 Refresh Audit Trail
+    </button>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="card" style="margin-bottom: 1.5rem; padding: 1.25rem;">
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.85rem; align-items: flex-end;">
+    <div class="form-group" style="margin-bottom: 0;">
+      <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">Action Type</label>
+      <select id="auditActionSelect" class="form-control">
+        <option value="all">All Actions</option>
+        <option value="GOVERNMENT_LOGIN">GOVERNMENT_LOGIN</option>
+        <option value="CONFIRM_EVALUATION">CONFIRM_EVALUATION</option>
+        <option value="CREATE_TRANSACTION">CREATE_TRANSACTION</option>
+        <option value="VIEW_REPORT">VIEW_REPORT</option>
+        <option value="VIEW_TRANSACTION">VIEW_TRANSACTION</option>
+        <option value="VIEW_FARMER_RECORD">VIEW_FARMER_RECORD</option>
+        <option value="VIEW_OFFICER_RECORD">VIEW_OFFICER_RECORD</option>
+        <option value="GLOBAL_SEARCH">GLOBAL_SEARCH</option>
+        <option value="EXPORT_CSV">EXPORT_CSV</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom: 0;">
+      <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">Actor Role</label>
+      <select id="auditRoleSelect" class="form-control">
+        <option value="all">All Roles</option>
+        <option value="government">Government Admin</option>
+        <option value="officer">Procurement Officer</option>
+        <option value="farmer">Farmer</option>
+        <option value="system">System Automated</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom: 0;">
+      <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">From Date</label>
+      <input type="date" id="auditFromDate" class="form-control">
+    </div>
+    <div class="form-group" style="margin-bottom: 0;">
+      <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">To Date</label>
+      <input type="date" id="auditToDate" class="form-control">
+    </div>
+    <div>
+      <button onclick="fetchAuditLogs()" class="btn btn-primary" style="width: 100%; height: 42px;">
+        Filter Logs
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Logs Table Card -->
+<div class="card">
+  <div class="card-header">
+    <h3>Immutable Action Events (<span id="logsCount">0</span>)</h3>
+    <span class="badge badge-success">Cryptographic Logging Active</span>
+  </div>
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Timestamp (UTC)</th>
+          <th>Action</th>
+          <th>Entity</th>
+          <th>Entity ID</th>
+          <th>Actor</th>
+          <th>Role</th>
+          <th>IP Address</th>
+          <th>Event Details</th>
+        </tr>
+      </thead>
+      <tbody id="auditLogsBody">
+        <tr><td colspan="8" style="text-align: center; padding: 2.5rem;">Loading audit trail...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  fetchAuditLogs();
+});
+
+async function fetchAuditLogs() {
+  const action = document.getElementById("auditActionSelect").value;
+  const role = document.getElementById("auditRoleSelect").value;
+  const fromDate = document.getElementById("auditFromDate").value;
+  const toDate = document.getElementById("auditToDate").value;
+
+  const params = new URLSearchParams();
+  if (action && action !== "all") params.append("action", action);
+  if (role && role !== "all") params.append("actor_role", role);
+  if (fromDate) params.append("from_date", fromDate);
+  if (toDate) params.append("to_date", toDate);
+
+  try {
+    const res = await fetch(`/api/government/audit-logs?${params.toString()}`);
+    const data = await res.json();
+    if (!data.success) {
+      showToast(data.error || "Failed to load audit logs.", "error");
+      return;
+    }
+
+    document.getElementById("logsCount").textContent = data.count;
+    renderAuditTable(data.logs);
+  } catch (err) {
+    console.error("Audit fetch error:", err);
+    showToast("Network error loading audit logs.", "error");
+  }
+}
+
+function renderAuditTable(logs) {
+  const tbody = document.getElementById("auditLogsBody");
+  if (!logs || logs.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2.5rem; color: #64748b;">No audit events found.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = logs.map(l => {
+    let detailsText = "";
+    if (typeof l.details === "object" && l.details !== null) {
+      detailsText = JSON.stringify(l.details);
+    } else {
+      detailsText = l.details || "";
+    }
+
+    const roleBadgeClass = l.actor_role === 'government' ? 'badge-info' : l.actor_role === 'officer' ? 'badge-grade-urs' : 'badge-success';
+
+    return `
+      <tr>
+        <td style="font-size: 0.82rem; color: #64748b; font-family: monospace;">${l.timestamp}</td>
+        <td>
+          <span class="badge" style="background: #f1f5f9; color: #0f172a; font-family: monospace; font-weight: 700; font-size: 0.78rem;">
+            ${l.action}
+          </span>
+        </td>
+        <td style="font-size: 0.85rem; text-transform: uppercase;">${l.entity_type}</td>
+        <td><span style="font-family: monospace; font-size: 0.82rem; color: #0284c7; font-weight: 600;">${l.entity_id || '-'}</span></td>
+        <td><b>${l.actor_name}</b></td>
+        <td><span class="badge ${roleBadgeClass}">${l.actor_role}</span></td>
+        <td style="font-family: monospace; font-size: 0.8rem; color: #64748b;">${l.ip_address}</td>
+        <td style="font-size: 0.8rem; color: #475569; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${detailsText.replace(/"/g, '&quot;')}">
+          ${detailsText || '-'}
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+</script>
+{% endblock %}

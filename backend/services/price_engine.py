@@ -1,10 +1,12 @@
-import os
 import time
-import requests
 from datetime import datetime, timezone
-from config import Config
-from backend.models.market import MarketPrice
+
+import requests
+
 from backend.database.db import db
+from backend.models.market import MarketPrice
+from config import Config
+
 
 class PriceEngine:
     """
@@ -151,12 +153,12 @@ class PriceEngine:
         }
 
     @staticmethod
-    def calculate_price_estimation(grade_a_pct, urs_pct, rejected_pct, modal_price=None, quantity_quintals=0.0):
+    def calculate_price_estimation(grade_a_pct, urs_pct, rejected_pct, modal_price=None, quantity_quintals=0.0, urs_multiplier=None):
         """
         Calculates Quality Score, Estimated Price per quintal, and Total Farmer Payout.
         
         Formula:
-        Quality Score = (Grade A% × 1.0) + (URS% × 0.8) + (Rejected% × 0)
+        Quality Score = (Grade A% × 1.0) + (URS% × urs_multiplier) + (Rejected% × 0)
         Estimated Price = Modal Mandi Price × (Quality Score / 100)
         Final Payout = Quantity (Quintals) × Estimated Price
         """
@@ -174,9 +176,15 @@ class PriceEngine:
             rej *= 100.0
 
         # Quality Score formula per specification:
-        # Grade A = 100% (1.0), URS = 80% (0.8), Rejected = 0% (0.0)
+        # Grade A = 100% (1.0), URS = customizable (default 80% / 0.8), Rejected = 0% (0.0)
         factor_ga = Config.PRICE_FACTORS.get("Grade A", 1.0)
-        factor_urs = Config.PRICE_FACTORS.get("URS", 0.8)
+        if urs_multiplier is not None:
+            try:
+                factor_urs = max(0.0, float(urs_multiplier))
+            except (ValueError, TypeError):
+                factor_urs = Config.PRICE_FACTORS.get("URS", 0.8)
+        else:
+            factor_urs = Config.PRICE_FACTORS.get("URS", 0.8)
         factor_rej = Config.PRICE_FACTORS.get("Rejected", 0.0)
 
         quality_score = (ga * factor_ga) + (urs * factor_urs) + (rej * factor_rej)

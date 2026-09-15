@@ -156,7 +156,7 @@
       <div style="background: white; border: 1px solid #e5e7eb; border-radius: var(--radius-sm); padding: 0.85rem;">
         <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Batch Quality Score</span>
         <div style="font-size: 1.4rem; font-weight: 800; color: #047857; margin-top: 0.25rem;">
-          {{ "{:.1f}%".format(evaluation.quality_score) if evaluation.quality_score is not None else "--%" }}
+          {{ "{:.1f}%".format(evaluation.quality_score) if evaluation.quality_score is not none else "--%" }}
         </div>
         <span style="font-size: 0.75rem; color: var(--text-muted);">(Grade A: 100%, URS: 80%, Rej: 0%)</span>
       </div>

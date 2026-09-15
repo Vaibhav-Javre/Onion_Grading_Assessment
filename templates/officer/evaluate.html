@@ -273,23 +273,42 @@
 
           <!-- Price Factors Breakdown -->
           <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.4rem; text-align: center; margin-bottom: 0.75rem;">
-            <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-sm); padding: 0.35rem 0.25rem;">
-              <div style="font-size: 0.7rem; color: #166534; font-weight: 600;">Grade A (100%)</div>
-              <div id="factorGradeAPct" style="font-weight: 800; font-size: 0.95rem; color: #15803d;">--%</div>
+            <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-sm); padding: 0.35rem 0.25rem; display: flex; flex-direction: column; justify-content: space-between;">
+              <div>
+                <div style="font-size: 0.7rem; color: #166534; font-weight: 600;">Grade A (100%)</div>
+                <div id="factorGradeAPct" style="font-weight: 800; font-size: 0.95rem; color: #15803d;">--%</div>
+              </div>
+              <div style="font-size: 0.68rem; color: #15803d; font-weight: 700; margin-top: 0.3rem; background: #dcfce7; border-radius: 3px; padding: 1px 0;">
+                Mult: 1.0
+              </div>
             </div>
-            <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: var(--radius-sm); padding: 0.35rem 0.25rem;">
-              <div style="font-size: 0.7rem; color: #92400e; font-weight: 600;">URS (80%)</div>
-              <div id="factorURSPct" style="font-weight: 800; font-size: 0.95rem; color: #b45309;">--%</div>
+            <div style="background: #fffbeb; border: 1.5px solid #f59e0b; border-radius: var(--radius-sm); padding: 0.35rem 0.25rem; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 1px 3px rgba(245, 158, 11, 0.15);">
+              <div>
+                <div style="font-size: 0.7rem; color: #92400e; font-weight: 600;">URS (<span id="displayUrsMultiplierPct">80</span>%)</div>
+                <div id="factorURSPct" style="font-weight: 800; font-size: 0.95rem; color: #b45309;">--%</div>
+              </div>
+              <div style="margin-top: 0.3rem; display: flex; align-items: center; justify-content: center; gap: 0.2rem;">
+                <label for="inputUrsMultiplier" style="font-size: 0.65rem; font-weight: 700; color: #92400e; margin: 0;">Mult:</label>
+                <input type="number" id="inputUrsMultiplier" step="0.05" min="0" max="1" value="0.8" 
+                       class="form-control" 
+                       style="width: 52px; height: 22px; font-size: 0.75rem; font-weight: 800; padding: 1px 3px; text-align: center; border: 1.5px solid #d97706; background: #ffffff; color: #b45309; border-radius: 4px;" 
+                       placeholder="0.8" title="Enter URS Multiplier (e.g. 0.8 for 80%, 0.75, 0.6)" oninput="onUrsMultiplierChange()">
+              </div>
             </div>
-            <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: var(--radius-sm); padding: 0.35rem 0.25rem;">
-              <div style="font-size: 0.7rem; color: #991b1b; font-weight: 600;">Rejected (0%)</div>
-              <div id="factorRejectedPct" style="font-weight: 800; font-size: 0.95rem; color: #dc2626;">--%</div>
+            <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: var(--radius-sm); padding: 0.35rem 0.25rem; display: flex; flex-direction: column; justify-content: space-between;">
+              <div>
+                <div style="font-size: 0.7rem; color: #991b1b; font-weight: 600;">Rejected (0%)</div>
+                <div id="factorRejectedPct" style="font-weight: 800; font-size: 0.95rem; color: #dc2626;">--%</div>
+              </div>
+              <div style="font-size: 0.68rem; color: #dc2626; font-weight: 700; margin-top: 0.3rem; background: #fee2e2; border-radius: 3px; padding: 1px 0;">
+                Mult: 0.0
+              </div>
             </div>
           </div>
 
           <!-- Formula Step -->
           <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: var(--radius-sm); padding: 0.5rem; font-size: 0.75rem; color: var(--text-dark); margin-bottom: 0.75rem;">
-            <div style="font-weight: 600; color: var(--primary-dark); margin-bottom: 0.15rem;">
+            <div id="formulaHeadingText" style="font-weight: 600; color: var(--primary-dark); margin-bottom: 0.15rem;">
               Quality Score = (Grade A% × 1.0) + (URS% × 0.8) + (Rejected% × 0)
             </div>
             <div id="formulaCalculationText" style="font-family: monospace; color: #065f46; font-size: 0.8rem;">

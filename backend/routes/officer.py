@@ -1,19 +1,23 @@
 import os
-from datetime import datetime, timezone, timedelta
-from flask import Blueprint, jsonify, request, session
+from datetime import datetime, timedelta, timezone
+
+from flask import Blueprint, jsonify, request
+
+from backend.ai.pipeline import evaluate_multiple_onion_images
 from backend.database.db import db
-from backend.models.user import User
-from backend.models.farmer import FarmerProfile
-from backend.models.officer import OfficerProfile
 from backend.models.evaluation import Evaluation, EvaluationImage, EvaluationItem
+from backend.models.farmer import FarmerProfile
 from backend.models.report import Report
-from backend.ai.pipeline import evaluate_onion_image, evaluate_multiple_onion_images
-from backend.services.pdf_service import generate_evaluation_pdf
+from backend.models.user import User
 from backend.services.market_price_service import MarketPriceService
+from backend.services.pdf_service import generate_evaluation_pdf
 from backend.services.price_engine import PriceEngine
 from backend.utils.auth_helpers import (
-    login_required, role_required, get_current_user,
-    generate_farmer_id, generate_report_id
+    generate_farmer_id,
+    generate_report_id,
+    get_current_user,
+    login_required,
+    role_required,
 )
 from backend.utils.file_helpers import allowed_file, save_upload_file
 from config import Config
@@ -71,6 +75,9 @@ def get_dashboard():
         "stats": {
             "today_evaluations": len(today_evals),
             "today_onions": today_onions,
+            "today_grade_a": today_grade_a,
+            "today_urs": today_urs,
+            "today_rejected": today_rejected,
             "total_farmers": total_farmers,
             "total_evaluations": len(all_evals),
             "total_onions": total_onions,
@@ -160,7 +167,7 @@ def create_farmer():
         }), 201
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": f"Failed to add farmer: {str(e)}"}), 500
+        return jsonify({"success": False, "error": f"Failed to add farmer: {e!s}"}), 500
 
 
 @officer_bp.route("/evaluate", methods=["POST"])
@@ -215,13 +222,13 @@ def run_evaluation():
             _, original_path = save_upload_file(file, Config.UPLOAD_FOLDER)
             saved_paths.append(original_path)
     except Exception as e:
-        return jsonify({"success": False, "error": f"Failed to save uploaded image(s): {str(e)}"}), 500
+        return jsonify({"success": False, "error": f"Failed to save uploaded image(s): {e!s}"}), 500
 
     # Run AI Pipeline across all images
     try:
         results = evaluate_multiple_onion_images(saved_paths)
     except Exception as e:
-        return jsonify({"success": False, "error": f"AI evaluation could not be completed: {str(e)}"}), 500
+        return jsonify({"success": False, "error": f"AI evaluation could not be completed: {e!s}"}), 500
 
     # Fetch Lasalgaon Mandi Reference & Compute Price Estimation
     mandi_ref = PriceEngine.get_lasalgaon_reference_price()
@@ -347,7 +354,7 @@ def run_evaluation():
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": f"Failed to record evaluation: {str(e)}"}), 500
+        return jsonify({"success": False, "error": f"Failed to record evaluation: {e!s}"}), 500
 
 
 @officer_bp.route("/evaluate/<int:eval_id>/confirm", methods=["POST"])
@@ -403,12 +410,17 @@ def confirm_evaluation(eval_id):
     urs_pct = round((evaluation.urs_count / total_onions) * 100, 1)
     rej_pct = round((evaluation.rejected_count / total_onions) * 100, 1)
 
+    urs_multiplier = payload.get("urs_multiplier")
+    if urs_multiplier is None:
+        urs_multiplier = payload.get("urs_factor")
+
     price_calc = PriceEngine.calculate_price_estimation(
         grade_a_pct=ga_pct,
         urs_pct=urs_pct,
         rejected_pct=rej_pct,
         modal_price=evaluation.mandi_modal_price,
-        quantity_quintals=evaluation.quantity_quintals
+        quantity_quintals=evaluation.quantity_quintals,
+        urs_multiplier=urs_multiplier
     )
     evaluation.quality_score = price_calc["quality_score_pct"]
     evaluation.estimated_price_per_quintal = price_calc["estimated_price_per_quintal"]
@@ -421,7 +433,7 @@ def confirm_evaluation(eval_id):
         evaluation.evaluation_date = datetime.now(timezone.utc)
 
         # Generate official PDF Report with Price Estimation Table
-        pdf_fn, pdf_fp, pdf_size = generate_evaluation_pdf(evaluation)
+        _pdf_fn, pdf_fp, pdf_size = generate_evaluation_pdf(evaluation)
 
         report = Report(
             evaluation_id=evaluation.id,
@@ -429,6 +441,27 @@ def confirm_evaluation(eval_id):
             file_size_bytes=pdf_size
         )
         db.session.add(report)
+        db.session.flush()
+
+        # Automatic Digital Procurement Transaction Record & Audit Trail
+        from backend.utils.audit_helpers import record_audit_log
+        from backend.utils.transaction_helpers import create_transaction_for_evaluation
+        create_transaction_for_evaluation(evaluation, commit=False)
+
+        record_audit_log(
+            action="CONFIRM_EVALUATION",
+            entity_type="evaluation",
+            entity_id=report_id,
+            details={
+                "evaluation_id": evaluation.id,
+                "officer_id": evaluation.officer.officer_id if evaluation.officer else None,
+                "farmer_id": evaluation.farmer.farmer_id if evaluation.farmer else None,
+                "total_onions": evaluation.total_onions,
+                "grade_a_count": evaluation.grade_a_count,
+                "overall_result": evaluation.overall_result
+            }
+        )
+
         db.session.commit()
 
         return jsonify({
@@ -441,7 +474,7 @@ def confirm_evaluation(eval_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": f"Failed to confirm report: {str(e)}"}), 500
+        return jsonify({"success": False, "error": f"Failed to confirm report: {e!s}"}), 500
 
 
 @officer_bp.route("/evaluate/<int:eval_id>/payout", methods=["POST", "PUT"])
@@ -497,7 +530,7 @@ def update_payout(eval_id):
     try:
         # Regenerate PDF report if report exists
         if evaluation.status == "confirmed" and evaluation.report_id:
-            pdf_fn, pdf_fp, pdf_size = generate_evaluation_pdf(evaluation)
+            _pdf_fn, pdf_fp, pdf_size = generate_evaluation_pdf(evaluation)
             if evaluation.report:
                 evaluation.report.pdf_path = pdf_fp
                 evaluation.report.file_size_bytes = pdf_size
@@ -511,7 +544,7 @@ def update_payout(eval_id):
         }), 200
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": f"Failed to update payout: {str(e)}"}), 500
+        return jsonify({"success": False, "error": f"Failed to update payout: {e!s}"}), 500
 
 
 

@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+
+{% block title %}Farmer Registry - Government Portal{% endblock %}
+{% block page_title %}National Farmer Registry & Quality Records{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h1 style="font-size: 1.65rem; color: #0b2545;">Farmer Registry</h1>
+    <p style="color: var(--text-muted); font-size: 0.9rem;">
+      Centralized verified records of onion-producing farmers, location hierarchy, and historical quality assessments.
+    </p>
+  </div>
+  <div style="display: flex; gap: 0.75rem;">
+    <button onclick="fetchFarmers()" class="btn btn-sm btn-outline">
+      🔄 Refresh
+    </button>
+  </div>
+</div>
+
+<!-- Search & Filter Bar -->
+<div class="card" style="margin-bottom: 1.5rem; padding: 1.25rem;">
+  <div style="display: grid; grid-template-columns: 2fr 1fr auto; gap: 1rem; align-items: flex-end;">
+    <div class="form-group" style="margin-bottom: 0;">
+      <label class="form-label" for="farmerSearchInput" style="font-size: 0.82rem; font-weight: 600;">Search Farmers</label>
+      <input type="text" id="farmerSearchInput" class="form-control" placeholder="Search by Farmer ID (FMR-...), Name, Mobile, Village, District...">
+    </div>
+    <div class="form-group" style="margin-bottom: 0;">
+      <label class="form-label" for="districtFilterSelect" style="font-size: 0.82rem; font-weight: 600;">Filter by District</label>
+      <select id="districtFilterSelect" class="form-control">
+        <option value="all">All Districts</option>
+        <option value="Nashik">Nashik</option>
+        <option value="Ahmednagar">Ahmednagar</option>
+        <option value="Pune">Pune</option>
+        <option value="Solapur">Solapur</option>
+      </select>
+    </div>
+    <div>
+      <button onclick="applyFarmerFilters()" class="btn btn-primary" style="height: 42px;">
+        Filter Records
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Farmers Table Card -->
+<div class="card">
+  <div class="card-header">
+    <h3>Registered Farmers (<span id="farmersCount">0</span>)</h3>
+  </div>
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Farmer ID</th>
+          <th>Farmer Name</th>
+          <th>Mobile Number</th>
+          <th>Village / Taluka</th>
+          <th>District & State</th>
+          <th>Total Evals</th>
+          <th>Total Bulbs</th>
+          <th>Grade Summary</th>
+          <th>Latest Eval</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="farmersTableBody">
+        <tr><td colspan="10" style="text-align: center; padding: 2rem;">Loading farmer records...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Farmer Detail Modal -->
+<div id="farmerDetailModal" style="display: none; position: fixed; inset: 0; z-index: 100; background: rgba(0, 0, 0, 0.5); align-items: center; justify-content: center; padding: 1.5rem;">
+  <div style="background: #ffffff; border-radius: var(--radius-lg); max-width: 800px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 2rem; box-shadow: var(--shadow-xl); position: relative;">
+    <button onclick="closeFarmerModal()" style="position: absolute; top: 1.25rem; right: 1.25rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b;">
+      ✕
+    </button>
+    
+    <div id="modalFarmerHeader" style="margin-bottom: 1.5rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 1rem;">
+      <h2 id="modalFarmerName" style="color: #0b2545;">Farmer Profile</h2>
+      <p id="modalFarmerMeta" style="color: #64748b; font-size: 0.9rem;"></p>
+    </div>
+
+    <h4 style="margin-bottom: 0.75rem; color: #0b2545;">Historical Evaluation Records</h4>
+    <div class="table-responsive" style="margin-bottom: 1.5rem;">
+      <table class="data-table" style="font-size: 0.85rem;">
+        <thead>
+          <tr>
+            <th>Report ID</th>
+            <th>Date</th>
+            <th>Onions</th>
+            <th>Grade A</th>
+            <th>URS</th>
+            <th>Rejected</th>
+            <th>Result</th>
+            <th>PDF</th>
+          </tr>
+        </thead>
+        <tbody id="modalEvalsBody">
+          <tr><td colspan="8" style="text-align: center;">No evaluations recorded.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h4 style="margin-bottom: 0.75rem; color: #0b2545;">Digital Procurement Transactions</h4>
+    <div class="table-responsive">
+      <table class="data-table" style="font-size: 0.85rem;">
+        <thead>
+          <tr>
+            <th>Transaction ID</th>
+            <th>Date</th>
+            <th>Center</th>
+            <th>Quantity (Q)</th>
+            <th>Total Payout</th>
+          </tr>
+        </thead>
+        <tbody id="modalTxnsBody">
+          <tr><td colspan="5" style="text-align: center;">No transactions recorded.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let allFarmersData = [];
+
+document.addEventListener("DOMContentLoaded", () => {
+  // Check URL query parameters
+  const urlParams = new URLSearchParams(window.location.search);
+  const searchParam = urlParams.get("search");
+  if (searchParam) {
+    document.getElementById("farmerSearchInput").value = searchParam;
+  }
+  fetchFarmers();
+});
+
+async function fetchFarmers() {
+  const q = document.getElementById("farmerSearchInput").value.trim();
+  const district = document.getElementById("districtFilterSelect").value;
+
+  const params = new URLSearchParams();
+  if (q) params.append("search", q);
+  if (district && district !== "all") params.append("district", district);
+
+  try {
+    const res = await fetch(`/api/government/farmers?${params.toString()}`);
+    const data = await res.json();
+    if (!data.success) {
+      showToast(data.error || "Failed to load farmers.", "error");
+      return;
+    }
+    allFarmersData = data.farmers;
+    document.getElementById("farmersCount").textContent = data.count;
+    renderFarmersTable(data.farmers);
+  } catch (err) {
+    console.error("Farmers fetch error:", err);
+    showToast("Network error loading farmers.", "error");
+  }
+}
+
+function applyFarmerFilters() {
+  fetchFarmers();
+}
+
+function renderFarmersTable(farmers) {
+  const tbody = document.getElementById("farmersTableBody");
+  if (!farmers || farmers.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; padding: 2.5rem; color: #64748b;">No matching farmer records found.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = farmers.map(f => `
+    <tr>
+      <td><span class="badge badge-info" style="font-family: monospace; font-weight: 700;">${f.farmer_id}</span></td>
+      <td><b>${f.name}</b></td>
+      <td>${f.phone || 'N/A'}</td>
+      <td>${f.village} / ${f.taluka}</td>
+      <td>${f.district}, ${f.state}</td>
+      <td style="font-weight: 700;">${f.total_evaluations}</td>
+      <td>${f.total_onions.toLocaleString()}</td>
+      <td>
+        <span style="color: #16a34a; font-weight: 600;">${f.grades.grade_a} A</span> •
+        <span style="color: #d97706; font-weight: 600;">${f.grades.urs} URS</span> •
+        <span style="color: #dc2626; font-weight: 600;">${f.grades.rejected} Rej</span>
+      </td>
+      <td style="font-size: 0.85rem; color: #64748b;">${f.latest_evaluation_date}</td>
+      <td>
+        <button onclick="viewFarmerHistory(${f.id})" class="btn btn-sm btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;">
+          History & Reports
+        </button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+async function viewFarmerHistory(farmerId) {
+  try {
+    const res = await fetch(`/api/government/farmers/${farmerId}`);
+    const data = await res.json();
+    if (!data.success) {
+      showToast(data.error || "Failed to load farmer history.", "error");
+      return;
+    }
+
+    const f = data.farmer;
+    document.getElementById("modalFarmerName").textContent = `${f.name} (${f.farmer_id})`;
+    document.getElementById("modalFarmerMeta").textContent = `Mobile: ${f.phone} • Location: ${f.village}, ${f.taluka}, ${f.district}, ${f.state}`;
+
+    // Evaluations
+    const evalsBody = document.getElementById("modalEvalsBody");
+    if (!data.evaluations || data.evaluations.length === 0) {
+      evalsBody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 1rem; color: #64748b;">No evaluations recorded.</td></tr>`;
+    } else {
+      evalsBody.innerHTML = data.evaluations.map(e => `
+        <tr>
+          <td><b>${e.report_id || 'ONR-' + e.id}</b></td>
+          <td>${e.evaluation_date}</td>
+          <td>${e.total_onions}</td>
+          <td style="color: #16a34a; font-weight: 600;">${e.grade_a.count}</td>
+          <td style="color: #d97706; font-weight: 600;">${e.urs.count}</td>
+          <td style="color: #dc2626; font-weight: 600;">${e.rejected.count}</td>
+          <td><span class="badge ${e.overall_result.includes('Grade A') ? 'badge-grade-a' : 'badge-grade-urs'}">${e.overall_result}</span></td>
+          <td><a href="/reports/download/Onion_Report_${e.report_id}.pdf" target="_blank" class="btn btn-sm btn-outline" style="padding: 0.15rem 0.4rem; font-size: 0.75rem;">PDF</a></td>
+        </tr>
+      `).join("");
+    }
+
+    // Transactions
+    const txnsBody = document.getElementById("modalTxnsBody");
+    if (!data.transactions || data.transactions.length === 0) {
+      txnsBody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 1rem; color: #64748b;">No digital transactions recorded.</td></tr>`;
+    } else {
+      txnsBody.innerHTML = data.transactions.map(t => `
+        <tr>
+          <td><span class="badge" style="background: #e0f2fe; color: #0369a1; font-family: monospace;">${t.transaction_id}</span></td>
+          <td>${t.transaction_date}</td>
+          <td>${t.procurement_center}</td>
+          <td>${t.economics.quantity_quintals} Q</td>
+          <td style="font-weight: 700; color: #0f172a;">₹${t.economics.total_payout.toLocaleString()}</td>
+        </tr>
+      `).join("");
+    }
+
+    const modal = document.getElementById("farmerDetailModal");
+    modal.style.display = "flex";
+  } catch (err) {
+    showToast("Error loading details.", "error");
+  }
+}
+
+function closeFarmerModal() {
+  document.getElementById("farmerDetailModal").style.display = "none";
+}
+</script>
+{% endblock %}

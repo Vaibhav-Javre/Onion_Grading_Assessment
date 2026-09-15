@@ -1,5 +1,7 @@
 import os
 from pathlib import Path
+from typing import ClassVar
+
 from dotenv import load_dotenv
 
 # Load environment variables from .env if present
@@ -27,7 +29,7 @@ class Config:
     
     # Upload limits
     MAX_CONTENT_LENGTH = 25 * 1024 * 1024  # 25 MB max upload
-    ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+    ALLOWED_EXTENSIONS: ClassVar[set[str]] = {"png", "jpg", "jpeg", "webp"}
 
     # AI Model Paths
     DETECTION_MODEL = os.getenv("DETECTION_MODEL", "models/best.pt")
@@ -37,19 +39,20 @@ class Config:
     CLASSIFICATION_MODEL_PATH = os.path.join(BASE_DIR, CLASSIFICATION_MODEL)
     
     # AI Thresholds
-    YOLO_CONFIDENCE_THRESHOLD = float(os.getenv("YOLO_CONFIDENCE_THRESHOLD", 0.25))
-    CLASSIFIER_CONFIDENCE_THRESHOLD = float(os.getenv("CLASSIFIER_CONFIDENCE_THRESHOLD", 0.50))
+    YOLO_CONFIDENCE_THRESHOLD = float(os.getenv("YOLO_CONFIDENCE_THRESHOLD", "0.25"))
+    YOLO_IMGSZ = int(os.getenv("YOLO_IMGSZ", "640"))
+    CLASSIFIER_CONFIDENCE_THRESHOLD = float(os.getenv("CLASSIFIER_CONFIDENCE_THRESHOLD", "0.50"))
     MOCK_AI_MODE = os.getenv("MOCK_AI_MODE", "False").lower() in ("true", "1", "t")
 
     # Quality classes order matches Keras classifier output
-    QUALITY_CLASSES = ["Damaged", "Healthy", "Rotten", "Sprouted"]
+    QUALITY_CLASSES: ClassVar[list[str]] = ["Damaged", "Healthy", "Rotten", "Sprouted"]
 
     # Grading mapping:
     # Healthy -> Grade A
     # Damaged -> URS (Under Regular Standard)
     # Rotten -> Rejected
     # Sprouted -> Rejected
-    GRADING_RULES = {
+    GRADING_RULES: ClassVar[dict[str, str]] = {
         "Healthy": "Grade A",
         "Damaged": "URS",
         "Rotten": "Rejected",
@@ -60,11 +63,11 @@ class Config:
     DATA_GOV_API_KEY = (os.getenv("DATA_GOV_API_KEY") or os.getenv("MARKET_API_KEY") or "").strip()
     MARKET_API_KEY = DATA_GOV_API_KEY
     MARKET_API_URL = os.getenv("MARKET_API_URL", "https://api.data.gov.in/resource/9ef84268-d588-465a-a308-a864a43d0070").strip()
-    MARKET_CACHE_TTL_SECONDS = int(os.getenv("MARKET_CACHE_TTL_SECONDS", 300))
+    MARKET_CACHE_TTL_SECONDS = int(os.getenv("MARKET_CACHE_TTL_SECONDS", "300"))
     DEFAULT_REFERENCE_MANDI = os.getenv("DEFAULT_REFERENCE_MANDI", "Lasalgaon").strip()
 
     # Price Estimation Engine Factors
-    PRICE_FACTORS = {
+    PRICE_FACTORS: ClassVar[dict[str, float]] = {
         "Grade A": 1.0,   # 100%
         "URS": 0.8,       # 80%
         "Rejected": 0.0   # 0%

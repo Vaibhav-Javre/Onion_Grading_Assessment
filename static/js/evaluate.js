@@ -22,7 +22,8 @@ let currentPriceData = {
   total_payout: 0,
   grade_a_pct: 0,
   urs_pct: 0,
-  rejected_pct: 0
+  rejected_pct: 0,
+  urs_multiplier: 0.8
 };
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -560,7 +561,8 @@ async function confirmAndSubmitReport() {
       total_payout: currentPriceData.total_payout,
       mandi_name: currentPriceData.mandi_name,
       mandi_price_date: currentPriceData.price_date,
-      mandi_api_source: currentPriceData.source
+      mandi_api_source: currentPriceData.source,
+      urs_multiplier: currentPriceData.urs_multiplier !== undefined ? currentPriceData.urs_multiplier : 0.8
     };
 
     const res = await fetch(`/api/officer/evaluate/${currentEvaluationId}/confirm`, {
@@ -638,6 +640,16 @@ function initPriceEngineUI(data) {
   currentPriceData.status = mandiInfo.status || "unknown";
   currentPriceData.is_live = Boolean(mandiInfo.is_live);
   currentPriceData.quantity_quintals = 0;
+  if (pe.factors && pe.factors.urs !== undefined) {
+    currentPriceData.urs_multiplier = parseFloat(pe.factors.urs);
+  } else {
+    currentPriceData.urs_multiplier = 0.8;
+  }
+
+  const inputUrs = document.getElementById("inputUrsMultiplier");
+  if (inputUrs) {
+    inputUrs.value = currentPriceData.urs_multiplier;
+  }
 
   // Header & Status Badges
   const mandiNameEl = document.getElementById("priceEngineMandiName");
@@ -691,9 +703,12 @@ function recalculatePriceEngine() {
   const ga = currentPriceData.grade_a_pct;
   const urs = currentPriceData.urs_pct;
   const rej = currentPriceData.rejected_pct;
+  const ursMult = (currentPriceData.urs_multiplier !== undefined && !isNaN(currentPriceData.urs_multiplier))
+                  ? currentPriceData.urs_multiplier
+                  : 0.8;
 
-  // Quality Score = (Grade A% × 1.0) + (URS% × 0.8) + (Rejected% × 0)
-  const qualityScore = Math.round(((ga * 1.0) + (urs * 0.8) + (rej * 0.0)) * 100) / 100;
+  // Quality Score = (Grade A% × 1.0) + (URS% × urs_multiplier) + (Rejected% × 0)
+  const qualityScore = Math.round(((ga * 1.0) + (urs * ursMult) + (rej * 0.0)) * 100) / 100;
   currentPriceData.quality_score_pct = qualityScore;
 
   // Modal Price
@@ -719,6 +734,10 @@ function recalculatePriceEngine() {
 }
 
 function updatePriceEngineDOM(qualityScore, estimatedPrice, finalPayout) {
+  const ursMult = (currentPriceData.urs_multiplier !== undefined && !isNaN(currentPriceData.urs_multiplier))
+                  ? currentPriceData.urs_multiplier
+                  : 0.8;
+
   // Modal Price
   const modalDisplay = document.getElementById("displayModalPrice");
   if (modalDisplay) {
@@ -732,15 +751,25 @@ function updatePriceEngineDOM(qualityScore, estimatedPrice, finalPayout) {
   const ursEl = document.getElementById("factorURSPct");
   if (ursEl) ursEl.textContent = `${currentPriceData.urs_pct.toFixed(1)}%`;
 
+  const ursPctHeader = document.getElementById("displayUrsMultiplierPct");
+  if (ursPctHeader) {
+    ursPctHeader.textContent = `${Math.round(ursMult * 100)}`;
+  }
+
   const rejEl = document.getElementById("factorRejectedPct");
   if (rejEl) rejEl.textContent = `${currentPriceData.rejected_pct.toFixed(1)}%`;
 
   // Formula Breakdown Text
+  const formulaHeading = document.getElementById("formulaHeadingText");
+  if (formulaHeading) {
+    formulaHeading.textContent = `Quality Score = (Grade A% × 1.0) + (URS% × ${ursMult}) + (Rejected% × 0)`;
+  }
+
   const formulaText = document.getElementById("formulaCalculationText");
   if (formulaText) {
     const gaPart = (currentPriceData.grade_a_pct * 1.0).toFixed(1);
-    const ursPart = (currentPriceData.urs_pct * 0.8).toFixed(1);
-    formulaText.textContent = `(${currentPriceData.grade_a_pct.toFixed(1)}% × 1.0) + (${currentPriceData.urs_pct.toFixed(1)}% × 0.8) + (${currentPriceData.rejected_pct.toFixed(1)}% × 0) = ${gaPart} + ${ursPart} + 0 = ${qualityScore.toFixed(1)}%`;
+    const ursPart = (currentPriceData.urs_pct * ursMult).toFixed(1);
+    formulaText.textContent = `(${currentPriceData.grade_a_pct.toFixed(1)}% × 1.0) + (${currentPriceData.urs_pct.toFixed(1)}% × ${ursMult}) + (${currentPriceData.rejected_pct.toFixed(1)}% × 0) = ${gaPart} + ${ursPart} + 0 = ${qualityScore.toFixed(1)}%`;
   }
 
   // Quality Score & Estimated Price
@@ -778,6 +807,17 @@ function onQuantityChange() {
   if (!input) return;
   const val = parseFloat(input.value);
   currentPriceData.quantity_quintals = (!isNaN(val) && val >= 0) ? val : 0;
+  recalculatePriceEngine();
+}
+
+function onUrsMultiplierChange() {
+  const input = document.getElementById("inputUrsMultiplier");
+  if (!input) return;
+  let val = parseFloat(input.value);
+  if (isNaN(val) || val < 0) {
+    val = 0;
+  }
+  currentPriceData.urs_multiplier = val;
   recalculatePriceEngine();
 }
 

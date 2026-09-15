@@ -1,0 +1,505 @@
+{% extends "base.html" %}
+
+{% block title %}Executive Government Dashboard - OnionGrade AI{% endblock %}
+{% block page_title %}National Onion Procurement & Quality Oversight{% endblock %}
+
+{% block content %}
+<!-- Executive Portal Header -->
+<div style="background: linear-gradient(135deg, #0b2545 0%, #133b5c 100%); color: #ffffff; padding: 1.75rem; border-radius: var(--radius-lg); margin-bottom: 1.75rem; box-shadow: var(--shadow-md); position: relative; overflow: hidden;">
+  <div style="position: absolute; right: -20px; bottom: -20px; font-size: 8rem; opacity: 0.07; user-select: none;">
+    🏛️
+  </div>
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; position: relative; z-index: 1;">
+    <div>
+      <div style="display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(255, 255, 255, 0.15); padding: 0.25rem 0.75rem; border-radius: var(--radius-full); font-size: 0.75rem; font-weight: 600; margin-bottom: 0.5rem; letter-spacing: 0.05em;">
+        <span>🇮🇳 MINISTRY OF AGRICULTURE & FARMERS WELFARE</span> • <span>DIRECTORATE OF MARKETING & INSPECTION</span>
+      </div>
+      <h1 style="font-size: 1.85rem; color: #ffffff; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.35rem;">
+        Central Procurement Command Center
+      </h1>
+      <p style="color: #cbd5e1; font-size: 0.95rem; max-width: 680px;">
+        Welcome, <b>{{ user.name }}</b>. Real-time aggregated digital monitoring of onion quality assessments, APMC mandis, field officers, and direct payout transactions nationwide.
+      </p>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end;">
+      <a href="{{ url_for('views.government_search') }}" class="btn btn-sm" style="background: #ffffff; color: #0b2545; font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+        🔍 Global Omni-Search
+      </a>
+      <span style="font-size: 0.78rem; color: #94a3b8;" id="liveClockBadge">Synchronized with APMC Network</span>
+    </div>
+  </div>
+</div>
+
+<!-- 8 KPI Metric Cards -->
+<div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1rem; margin-bottom: 1.75rem;">
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Registered Farmers</span>
+      <span id="statFarmers" class="stat-value">--</span>
+      <span class="stat-sub">Active in registry</span>
+    </div>
+    <div class="stat-icon blue">🧑‍🌾</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Field Officers</span>
+      <span id="statOfficers" class="stat-value">--</span>
+      <span class="stat-sub">Across Mandis</span>
+    </div>
+    <div class="stat-icon blue">👮‍♂️</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Procurement Centers</span>
+      <span id="statCenters" class="stat-value">--</span>
+      <span class="stat-sub">APMC Yards</span>
+    </div>
+    <div class="stat-icon amber">🏛️</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Total Evaluations</span>
+      <span id="statEvaluations" class="stat-value">--</span>
+      <span class="stat-sub">Confirmed batches</span>
+    </div>
+    <div class="stat-icon green">📑</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Onions Evaluated</span>
+      <span id="statOnions" class="stat-value">--</span>
+      <span class="stat-sub">AI bulb detections</span>
+    </div>
+    <div class="stat-icon green">🧅</div>
+  </div>
+
+  <div class="stat-card grade-a">
+    <div class="stat-info">
+      <span class="stat-label">Grade A (Premium)</span>
+      <span id="statGradeA" class="stat-value" style="color: var(--grade-a);">--</span>
+      <span id="statGradeAPct" class="stat-sub">--% of total output</span>
+    </div>
+    <div class="stat-icon green">✓</div>
+  </div>
+
+  <div class="stat-card urs">
+    <div class="stat-info">
+      <span class="stat-label">URS Standard</span>
+      <span id="statURS" class="stat-value" style="color: var(--grade-urs);">--</span>
+      <span id="statURSPct" class="stat-sub">--% regular commercial</span>
+    </div>
+    <div class="stat-icon amber">⚠️</div>
+  </div>
+
+  <div class="stat-card rejected">
+    <div class="stat-info">
+      <span class="stat-label">Rejected Bulbs</span>
+      <span id="statRejected" class="stat-value" style="color: var(--grade-rej);">--</span>
+      <span id="statRejectedPct" class="stat-sub">--% rotten / sprouted</span>
+    </div>
+    <div class="stat-icon red">✕</div>
+  </div>
+</div>
+
+<!-- Financial & Volume Snapshot -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1.75rem;">
+  <div style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: var(--radius-md); padding: 1.25rem; display: flex; align-items: center; gap: 1rem; box-shadow: var(--shadow-sm);">
+    <div style="width: 48px; height: 48px; border-radius: var(--radius-md); background: #ecfdf5; color: #059669; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 800;">
+      ₹
+    </div>
+    <div>
+      <div style="font-size: 0.8rem; color: #64748b; font-weight: 600; text-transform: uppercase;">Total Certified Payout Value</div>
+      <div id="statTotalPayout" style="font-size: 1.6rem; font-weight: 800; color: #0f172a;">₹0.00</div>
+      <div style="font-size: 0.78rem; color: #10b981;">Direct farmer benefit settlement</div>
+    </div>
+  </div>
+
+  <div style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: var(--radius-md); padding: 1.25rem; display: flex; align-items: center; gap: 1rem; box-shadow: var(--shadow-sm);">
+    <div style="width: 48px; height: 48px; border-radius: var(--radius-md); background: #eff6ff; color: #2563eb; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 800;">
+      ⚖️
+    </div>
+    <div>
+      <div style="font-size: 0.8rem; color: #64748b; font-weight: 600; text-transform: uppercase;">Total Procured Quantity</div>
+      <div id="statTotalVolume" style="font-size: 1.6rem; font-weight: 800; color: #0f172a;">0.00 Quintals</div>
+      <div style="font-size: 0.78rem; color: #3b82f6;">Recorded across procurement yards</div>
+    </div>
+  </div>
+
+  <div style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: var(--radius-md); padding: 1.25rem; display: flex; align-items: center; gap: 1rem; box-shadow: var(--shadow-sm);">
+    <div style="width: 48px; height: 48px; border-radius: var(--radius-md); background: #fef3c7; color: #d97706; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 800;">
+      🛡️
+    </div>
+    <div>
+      <div style="font-size: 0.8rem; color: #64748b; font-weight: 600; text-transform: uppercase;">Audit Integrity Status</div>
+      <div style="font-size: 1.3rem; font-weight: 800; color: #15803d;">100% Immutable</div>
+      <div style="font-size: 0.78rem; color: #64748b;">Cryptographic audit log active</div>
+    </div>
+  </div>
+</div>
+
+<!-- Charts Section: Quality & Defect Distribution -->
+<div style="display: grid; grid-template-columns: 1.1fr 1fr; gap: 1.5rem; margin-bottom: 1.75rem;">
+  <div class="card" style="margin-bottom: 0;">
+    <div class="card-header">
+      <h3>Official Grade Categorization</h3>
+      <span class="badge badge-info">Grade A vs URS vs Rejected</span>
+    </div>
+    <div style="height: 280px; position: relative; padding: 0.5rem;">
+      <canvas id="gradeDoughnutChart"></canvas>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom: 0;">
+    <div class="card-header">
+      <h3>AI Defect Class Breakdown</h3>
+      <span class="badge badge-info">Healthy vs Damaged vs Rotten vs Sprouted</span>
+    </div>
+    <div style="height: 280px; position: relative; padding: 0.5rem;">
+      <canvas id="classBarChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- District-wise Overview & Live Market Benchmarks -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.75rem;">
+  <!-- District Stats Card -->
+  <div class="card" style="margin-bottom: 0;">
+    <div class="card-header">
+      <h3>District-Wise Procurement Volume</h3>
+      <a href="{{ url_for('views.government_analytics') }}" style="font-size: 0.85rem; color: var(--primary-light);">Full Analytics →</a>
+    </div>
+    <div class="table-responsive" style="max-height: 280px; overflow-y: auto;">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>District</th>
+            <th>Evaluations</th>
+            <th>Total Onions</th>
+            <th>Grade A Ratio</th>
+          </tr>
+        </thead>
+        <tbody id="districtStatsBody">
+          <tr><td colspan="4" style="text-align: center; padding: 1.5rem;">Loading district metrics...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Live Mandi Benchmark Prices -->
+  <div class="card" style="margin-bottom: 0;">
+    <div class="card-header">
+      <h3>Latest Onion Mandi Reference Rates</h3>
+      <span class="badge badge-success">Live APMC Benchmark</span>
+    </div>
+    <div class="table-responsive" style="max-height: 280px; overflow-y: auto;">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Market Center</th>
+            <th>District</th>
+            <th>Modal Price</th>
+            <th>Arrivals</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="marketRatesBody">
+          <tr><td colspan="5" style="text-align: center; padding: 1.5rem;">Loading live Mandi prices...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Recent Digital Transactions Table -->
+<div class="card" style="margin-bottom: 1.75rem;">
+  <div class="card-header">
+    <div>
+      <h3>Recent Digital Procurement Transactions</h3>
+      <p style="font-size: 0.85rem; color: var(--text-muted);">Confirmed digital settlements with automated audit timestamps</p>
+    </div>
+    <a href="{{ url_for('views.government_transactions') }}" class="btn btn-outline btn-sm">
+      View All Transactions →
+    </a>
+  </div>
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Transaction ID</th>
+          <th>Report ID</th>
+          <th>Date & Time</th>
+          <th>Farmer</th>
+          <th>Procurement Center</th>
+          <th>Quantity</th>
+          <th>Result</th>
+          <th>Total Payout</th>
+          <th>Audit</th>
+        </tr>
+      </thead>
+      <tbody id="recentTransactionsBody">
+        <tr><td colspan="9" style="text-align: center; padding: 2rem;">Loading recent transactions...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Recent Evaluations Table -->
+<div class="card" style="margin-bottom: 1.75rem;">
+  <div class="card-header">
+    <div>
+      <h3>Recent AI Quality Evaluations</h3>
+      <p style="font-size: 0.85rem; color: var(--text-muted);">Verified inspection reports submitted by Mandi officers</p>
+    </div>
+    <a href="{{ url_for('views.government_reports') }}" class="btn btn-outline btn-sm">
+      View All Reports →
+    </a>
+  </div>
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Report Code</th>
+          <th>Timestamp</th>
+          <th>Farmer ID</th>
+          <th>Officer</th>
+          <th>Bulbs</th>
+          <th>Grade A</th>
+          <th>URS</th>
+          <th>Rejected</th>
+          <th>Overall Grade</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="recentEvaluationsBody">
+        <tr><td colspan="10" style="text-align: center; padding: 2rem;">Loading recent evaluations...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let gradeChart = null;
+let classChart = null;
+
+document.addEventListener("DOMContentLoaded", async () => {
+  await fetchDashboardData();
+});
+
+async function fetchDashboardData() {
+  try {
+    const res = await fetch("/api/government/dashboard");
+    const data = await res.json();
+    if (!data.success) {
+      showToast(data.error || "Failed to load dashboard data.", "error");
+      return;
+    }
+
+    const s = data.summary;
+    document.getElementById("statFarmers").textContent = s.total_farmers || 0;
+    document.getElementById("statOfficers").textContent = s.total_officers || 0;
+    document.getElementById("statCenters").textContent = s.total_centers || 0;
+    document.getElementById("statEvaluations").textContent = s.total_evaluations || 0;
+    document.getElementById("statOnions").textContent = (s.total_onions || 0).toLocaleString();
+    document.getElementById("statGradeA").textContent = (s.grades.grade_a.count || 0).toLocaleString();
+    document.getElementById("statGradeAPct").textContent = `${s.grades.grade_a.percentage || 0}% of output`;
+    document.getElementById("statURS").textContent = (s.grades.urs.count || 0).toLocaleString();
+    document.getElementById("statURSPct").textContent = `${s.grades.urs.percentage || 0}% regular`;
+    document.getElementById("statRejected").textContent = (s.grades.rejected.count || 0).toLocaleString();
+    document.getElementById("statRejectedPct").textContent = `${s.grades.rejected.percentage || 0}% rejected`;
+
+    document.getElementById("statTotalPayout").textContent = `₹${(s.total_payout || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+    document.getElementById("statTotalVolume").textContent = `${(s.total_quintals || 0).toLocaleString('en-IN', {minimumFractionDigits: 1})} Quintals`;
+
+    // Render Charts
+    renderGradeDoughnut(s.grades);
+    renderClassBar(s.classes);
+
+    // Render District stats
+    renderDistrictStats(data.district_stats);
+
+    // Render Market prices
+    renderMarketPrices(data.market_prices);
+
+    // Render Recent Transactions
+    renderRecentTransactions(data.recent_transactions);
+
+    // Render Recent Evaluations
+    renderRecentEvaluations(data.recent_evaluations);
+
+  } catch (err) {
+    console.error("Dashboard fetch error:", err);
+    showToast("Network error loading dashboard statistics.", "error");
+  }
+}
+
+function renderGradeDoughnut(grades) {
+  const ctx = document.getElementById("gradeDoughnutChart").getContext("2d");
+  if (gradeChart) gradeChart.destroy();
+
+  gradeChart = new Chart(ctx, {
+    type: "doughnut",
+    data: {
+      labels: ["Grade A (Premium)", "URS Standard", "Rejected Bulbs"],
+      datasets: [{
+        data: [grades.grade_a.count || 0, grades.urs.count || 0, grades.rejected.count || 0],
+        backgroundColor: ["#16a34a", "#d97706", "#dc2626"],
+        borderWidth: 2,
+        borderColor: "#ffffff"
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: "bottom" },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => ` ${ctx.label}: ${ctx.raw} (${ctx.dataset.data.reduce((a,b)=>a+b,0) ? Math.round(ctx.raw/ctx.dataset.data.reduce((a,b)=>a+b,0)*100) : 0}%)`
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderClassBar(classes) {
+  const ctx = document.getElementById("classBarChart").getContext("2d");
+  if (classChart) classChart.destroy();
+
+  classChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: ["Healthy", "Damaged", "Rotten", "Sprouted"],
+      datasets: [{
+        label: "Detected Onions",
+        data: [
+          classes.healthy.count || 0,
+          classes.damaged.count || 0,
+          classes.rotten.count || 0,
+          classes.sprouted.count || 0
+        ],
+        backgroundColor: ["#10b981", "#f59e0b", "#ef4444", "#8b5cf6"],
+        borderRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, grid: { color: "#f1f5f9" } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+function renderDistrictStats(stats) {
+  const tbody = document.getElementById("districtStatsBody");
+  if (!stats || stats.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 1.5rem; color: #64748b;">No district records available.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = stats.map(d => {
+    const gaPct = d.total_onions ? Math.round(d.grade_a / d.total_onions * 100) : 0;
+    return `
+      <tr>
+        <td><b>${d.district}</b></td>
+        <td>${d.evaluations}</td>
+        <td>${d.total_onions.toLocaleString()}</td>
+        <td>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <div style="flex: 1; height: 6px; background: #e2e8f0; border-radius: 4px; overflow: hidden;">
+              <div style="width: ${gaPct}%; height: 100%; background: #16a34a;"></div>
+            </div>
+            <span style="font-weight: 700; color: #16a34a; font-size: 0.82rem;">${gaPct}%</span>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function renderMarketPrices(prices) {
+  const tbody = document.getElementById("marketRatesBody");
+  if (!prices || prices.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 1.5rem; color: #64748b;">No market price benchmarks found.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = prices.slice(0, 5).map(p => `
+    <tr>
+      <td><b>${p.market_name}</b></td>
+      <td>${p.district}</td>
+      <td style="font-weight: 700; color: #0b2545;">₹${p.modal_price}</td>
+      <td>${p.arrival_tons} Tons</td>
+      <td><span class="badge badge-success">${p.time_ago}</span></td>
+    </tr>
+  `).join("");
+}
+
+function renderRecentTransactions(txns) {
+  const tbody = document.getElementById("recentTransactionsBody");
+  if (!txns || txns.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 2rem; color: #64748b;">No procurement transactions recorded yet.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = txns.map(t => `
+    <tr>
+      <td><span class="badge" style="background: #e0f2fe; color: #0369a1; font-family: monospace; font-weight: 700;">${t.transaction_id}</span></td>
+      <td><a href="/reports/download/Onion_Report_${t.report_id}.pdf" target="_blank" style="color: #0284c7; font-weight: 600;">${t.report_id}</a></td>
+      <td style="font-size: 0.85rem; color: #64748b;">${t.transaction_date}</td>
+      <td><b>${t.farmer.name || 'Farmer'}</b><div style="font-size: 0.75rem; color: #64748b;">${t.farmer.farmer_id}</div></td>
+      <td style="font-size: 0.85rem;">${t.procurement_center}</td>
+      <td>${t.counts.total_onions} bulbs<div style="font-size: 0.75rem; color: #64748b;">${t.economics.quantity_quintals} Q</div></td>
+      <td>
+        <span class="badge ${t.final_result.includes('Grade A') ? 'badge-grade-a' : t.final_result.includes('URS') ? 'badge-grade-urs' : 'badge-grade-rej'}">
+          ${t.final_result}
+        </span>
+      </td>
+      <td style="font-weight: 700; color: #0f172a;">₹${t.economics.total_payout.toLocaleString()}</td>
+      <td>
+        <a href="/government/transactions?search=${t.transaction_id}" class="btn btn-outline btn-sm" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">
+          Details
+        </a>
+      </td>
+    </tr>
+  `).join("");
+}
+
+function renderRecentEvaluations(evals) {
+  const tbody = document.getElementById("recentEvaluationsBody");
+  if (!evals || evals.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; padding: 2rem; color: #64748b;">No recent evaluations available.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = evals.map(e => `
+    <tr>
+      <td><b>${e.report_id || 'ONR-' + e.id}</b></td>
+      <td style="font-size: 0.85rem; color: #64748b;">${e.evaluation_date}</td>
+      <td><span class="badge badge-info">${e.farmer ? e.farmer.farmer_id : 'N/A'}</span></td>
+      <td style="font-size: 0.85rem;">${e.officer ? e.officer.name : 'Officer'}</td>
+      <td><b>${e.total_onions}</b></td>
+      <td style="color: #16a34a; font-weight: 600;">${e.grade_a.count}</td>
+      <td style="color: #d97706; font-weight: 600;">${e.urs.count}</td>
+      <td style="color: #dc2626; font-weight: 600;">${e.rejected.count}</td>
+      <td>
+        <span class="badge ${e.overall_result.includes('Grade A') ? 'badge-grade-a' : e.overall_result.includes('URS') ? 'badge-grade-urs' : 'badge-grade-rej'}">
+          ${e.overall_result}
+        </span>
+      </td>
+      <td>
+        <a href="/reports/download/Onion_Report_${e.report_id}.pdf" target="_blank" class="btn btn-sm btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+          📄 PDF
+        </a>
+      </td>
+    </tr>
+  `).join("");
+}
+</script>
+{% endblock %}

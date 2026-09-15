@@ -1,10 +1,12 @@
 import os
-from flask import Blueprint, jsonify, request, send_file, abort, redirect, url_for
+
+from flask import Blueprint, jsonify, redirect, request, send_file
+
 from backend.database.db import db
 from backend.models.evaluation import Evaluation
 from backend.models.report import Report
 from backend.services.pdf_service import generate_evaluation_pdf
-from backend.utils.auth_helpers import login_required, get_current_user
+from backend.utils.auth_helpers import get_current_user
 
 reports_bp = Blueprint("reports_bp", __name__)
 
@@ -48,16 +50,26 @@ def _get_evaluation_with_auth(report_identifier):
         return None, (jsonify({"success": False, "error": f"Evaluation report '{report_identifier}' not found."}), 404)
 
     user = get_current_user()
-    if user:
-        if user.role == "farmer":
-            if not user.farmer_profile or eval_record.farmer_id != user.farmer_profile.id:
-                return None, (jsonify({
-                    "success": False,
-                    "error": "Access denied. You are not authorized to view reports belonging to other farmers."
-                }), 403)
+    if user and user.role == "farmer":
+        if not user.farmer_profile or eval_record.farmer_id != user.farmer_profile.id:
+            return None, (jsonify({
+                "success": False,
+                "error": "Access denied. You are not authorized to view reports belonging to other farmers."
+            }), 403)
+    elif user and user.role in ("government", "admin", "officer"):
+        pass
     # If no session, allow download if report is confirmed
     elif eval_record.status != "confirmed":
         return None, (jsonify({"success": False, "error": "Authentication required."}), 401)
+
+    from backend.utils.audit_helpers import record_audit_log
+    record_audit_log(
+        action="VIEW_REPORT",
+        entity_type="report",
+        entity_id=eval_record.report_id or str(eval_record.id),
+        details={"status": eval_record.status, "overall_result": eval_record.overall_result},
+        user=user
+    )
 
     return eval_record, None
 
@@ -69,7 +81,7 @@ def _serve_pdf(eval_record, as_attachment=True):
 
     if not pdf_path or not os.path.exists(pdf_path):
         try:
-            pdf_fn, pdf_fp, pdf_size = generate_evaluation_pdf(eval_record)
+            _pdf_fn, pdf_fp, pdf_size = generate_evaluation_pdf(eval_record)
             if not report:
                 report = Report(evaluation_id=eval_record.id, pdf_path=pdf_fp, file_size_bytes=pdf_size)
                 db.session.add(report)
@@ -79,7 +91,7 @@ def _serve_pdf(eval_record, as_attachment=True):
             db.session.commit()
             pdf_path = pdf_fp
         except Exception as e:
-            return jsonify({"success": False, "error": f"Failed to generate PDF: {str(e)}"}), 500
+            return jsonify({"success": False, "error": f"Failed to generate PDF: {e!s}"}), 500
 
     report_code = eval_record.report_id or f"ONR-{eval_record.id}"
     download_filename = f"Onion_Report_{report_code}.pdf"

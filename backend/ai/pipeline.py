@@ -1,11 +1,14 @@
 import os
+import time
 import uuid
 from collections import Counter
+
 import cv2
 import numpy as np
-from config import Config
-from backend.ai.detector import OnionDetector
+
 from backend.ai.classifier import OnionClassifier
+from backend.ai.detector import OnionDetector
+from config import Config
 
 # High-contrast color palette (BGR format for OpenCV)
 CLASS_COLORS_BGR = {
@@ -31,6 +34,7 @@ def evaluate_onion_image(image_path, yolo_conf=None, classifier_conf=None):
     
     NOTE: Size estimation is intentionally excluded per project specification.
     """
+    pipeline_start = time.perf_counter()
     if yolo_conf is None:
         yolo_conf = Config.YOLO_CONFIDENCE_THRESHOLD
     if classifier_conf is None:
@@ -40,27 +44,38 @@ def evaluate_onion_image(image_path, yolo_conf=None, classifier_conf=None):
     if image is None:
         raise ValueError(f"Could not read image at path: {image_path}")
 
-    h, w = image.shape[:2]
+    _h, w = image.shape[:2]
     annotated_image = image.copy()
 
     detector = OnionDetector()
     classifier = OnionClassifier()
 
-    # Step 1: Detect onions
+    # Step 1: Run YOLO11 detection as currently
+    yolo_start = time.perf_counter()
     raw_detections = detector.detect(image, conf_threshold=yolo_conf)
+    yolo_time = time.perf_counter() - yolo_start
+
+    # Step 2: Extract and store ALL detected onion crops
+    valid_detections = []
+    crops = []
+    for det in raw_detections:
+        x1, y1, x2, y2 = det["box"]
+        crop = image[y1:y2, x1:x2]
+        if crop is not None and crop.size > 0:
+            valid_detections.append(det)
+            crops.append(crop)
+
+    # Steps 3, 4, 5: Preprocess, stack into NumPy batch, and run classifier ONCE
+    cls_start = time.perf_counter()
+    classification_results = classifier.classify_batch(crops, conf_threshold=classifier_conf)
+    cls_time = time.perf_counter() - cls_start
 
     items = []
     class_counts = Counter()
 
-    # Step 2: Crop & Classify each detected onion
-    for idx, det in enumerate(raw_detections, start=1):
+    # Step 6: Map each prediction back to its corresponding onion detection
+    for idx, (det, (class_name, cls_conf, _prob_dict)) in enumerate(zip(valid_detections, classification_results), start=1):
         x1, y1, x2, y2 = det["box"]
-        crop = image[y1:y2, x1:x2]
-
-        if crop.size == 0:
-            continue
-
-        class_name, cls_conf, prob_dict = classifier.classify(crop, conf_threshold=classifier_conf)
         class_counts[class_name] += 1
 
         # Save item details
@@ -72,7 +87,7 @@ def evaluate_onion_image(image_path, yolo_conf=None, classifier_conf=None):
             "bounding_box": [x1, y1, x2, y2]
         })
 
-        # Step 3: Draw bounding box & tag
+        # Step 7: Draw bounding box & tag
         color = CLASS_COLORS_BGR.get(class_name, (50, 180, 50))
         cv2.rectangle(annotated_image, (x1, y1), (x2, y2), color, 3)
 
@@ -81,7 +96,7 @@ def evaluate_onion_image(image_path, yolo_conf=None, classifier_conf=None):
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = 0.55
         thickness = 2
-        (tw, th), baseline = cv2.getTextSize(label, font, font_scale, thickness)
+        (tw, th), _baseline = cv2.getTextSize(label, font, font_scale, thickness)
 
         badge_y1 = max(0, y1 - th - 10)
         badge_y2 = y1
@@ -159,6 +174,13 @@ def evaluate_onion_image(image_path, yolo_conf=None, classifier_conf=None):
     out_path = os.path.join(Config.OUTPUT_FOLDER, out_filename)
     cv2.imwrite(out_path, annotated_image)
 
+    total_pipeline_time = time.perf_counter() - pipeline_start
+    print(
+        f"[AI Pipeline Timing] Single Image ({total_onions} onions) | "
+        f"YOLO: {yolo_time:.3f}s | Classifier: {cls_time:.3f}s | "
+        f"Total Pipeline: {total_pipeline_time:.3f}s"
+    )
+
     return {
         "total_onions": total_onions,
         "classes": {
@@ -226,45 +248,180 @@ def create_annotated_collage(annotated_paths, max_cols=3, target_w=640, target_h
 def evaluate_multiple_onion_images(image_paths, yolo_conf=None, classifier_conf=None):
     """
     Evaluates 1 to any number of onion images (from different angles or sample batches):
-    1. Evaluates each image independently using evaluate_onion_image.
-    2. Aggregates counts, percentages, and classifications across all images.
-    3. Numbers detections sequentially and tags each with image_order.
-    4. Produces a consolidated procurement quality summary and an annotated overview collage.
+    1. Runs YOLO detection separately on each image.
+    2. Collects ALL onion crops from all images first.
+    3. Runs classifier.classify_batch(all_crops) ONLY ONCE (Global Batch Classification).
+    4. Maps predictions back to their correct image and detection.
+    5. Produces per-image results, consolidated grading summary, and annotated overview collage.
     """
     if not image_paths:
         raise ValueError("At least one image path must be provided for evaluation.")
 
+    pipeline_start = time.perf_counter()
+    if yolo_conf is None:
+        yolo_conf = Config.YOLO_CONFIDENCE_THRESHOLD
+    if classifier_conf is None:
+        classifier_conf = Config.CLASSIFIER_CONFIDENCE_THRESHOLD
+
+    detector = OnionDetector()
+    classifier = OnionClassifier()
+
+    parsed_images = []
+    all_crops = []
+
+    # Step 1: Run YOLO detection separately on each image and collect crops
+    yolo_start = time.perf_counter()
+    for order_idx, img_path in enumerate(image_paths, start=1):
+        image = cv2.imread(img_path)
+        if image is None:
+            raise ValueError(f"Could not read image at path: {img_path}")
+
+        raw_detections = detector.detect(image, conf_threshold=yolo_conf)
+
+        valid_detections = []
+        start_crop_idx = len(all_crops)
+        for det in raw_detections:
+            x1, y1, x2, y2 = det["box"]
+            crop = image[y1:y2, x1:x2]
+            if crop is not None and crop.size > 0:
+                valid_detections.append(det)
+                all_crops.append(crop)
+        end_crop_idx = len(all_crops)
+
+        parsed_images.append({
+            "order_idx": order_idx,
+            "img_path": img_path,
+            "image": image,
+            "valid_detections": valid_detections,
+            "crop_slice": (start_crop_idx, end_crop_idx)
+        })
+    yolo_time = time.perf_counter() - yolo_start
+
+    # Step 2: Global batch classification ONLY ONCE across all collected crops
+    cls_start = time.perf_counter()
+    all_predictions = classifier.classify_batch(all_crops, conf_threshold=classifier_conf)
+    cls_time = time.perf_counter() - cls_start
+
+    # Step 3: Map predictions back to their correct image/detection and annotate
     per_image_results = []
     all_detections = []
     total_class_counts = Counter()
     global_onion_idx = 1
 
-    for order_idx, img_path in enumerate(image_paths, start=1):
-        res = evaluate_onion_image(img_path, yolo_conf=yolo_conf, classifier_conf=classifier_conf)
+    for item in parsed_images:
+        order_idx = item["order_idx"]
+        img_path = item["img_path"]
+        image = item["image"]
+        valid_detections = item["valid_detections"]
+        start_idx, end_idx = item["crop_slice"]
+        img_predictions = all_predictions[start_idx:end_idx]
 
-        # Re-number and tag detections with image_order
+        _h, w = image.shape[:2]
+        annotated_image = image.copy()
+
+        items = []
+        class_counts = Counter()
         tagged_detections = []
-        for det in res["detections"]:
-            det_copy = dict(det)
+
+        for local_idx, (det, (class_name, cls_conf, _prob_dict)) in enumerate(zip(valid_detections, img_predictions), start=1):
+            x1, y1, x2, y2 = det["box"]
+            class_counts[class_name] += 1
+            total_class_counts[class_name] += 1
+
+            # Save item details (both for local image and tagged global detections)
+            det_info = {
+                "onion_number": local_idx,
+                "class_name": class_name,
+                "classification_confidence": cls_conf,
+                "detection_confidence": det["confidence"],
+                "bounding_box": [x1, y1, x2, y2]
+            }
+            items.append(det_info)
+
+            det_copy = dict(det_info)
             det_copy["image_order"] = order_idx
             det_copy["onion_number"] = global_onion_idx
             global_onion_idx += 1
             tagged_detections.append(det_copy)
             all_detections.append(det_copy)
 
-        for c_name in ["Healthy", "Damaged", "Rotten", "Sprouted", "Uncertain"]:
-            total_class_counts[c_name] += res["classes"][c_name]["count"]
+            # Draw bounding box & tag
+            color = CLASS_COLORS_BGR.get(class_name, (50, 180, 50))
+            cv2.rectangle(annotated_image, (x1, y1), (x2, y2), color, 3)
+
+            # Label badge
+            label = f"#{local_idx} {class_name} {int(cls_conf * 100)}%"
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.55
+            thickness = 2
+            (tw, th), _baseline = cv2.getTextSize(label, font, font_scale, thickness)
+
+            badge_y1 = max(0, y1 - th - 10)
+            badge_y2 = y1
+            badge_x2 = min(w, x1 + tw + 10)
+
+            # Draw filled background badge for contrast
+            cv2.rectangle(annotated_image, (x1, badge_y1), (badge_x2, badge_y2), color, -1)
+            # Text in white
+            cv2.putText(
+                annotated_image,
+                label,
+                (x1 + 5, badge_y2 - 5),
+                font,
+                font_scale,
+                (255, 255, 255),
+                thickness,
+                cv2.LINE_AA
+            )
+
+        # Save annotated output image
+        os.makedirs(Config.OUTPUT_FOLDER, exist_ok=True)
+        out_filename = f"annotated_{uuid.uuid4().hex}.jpg"
+        out_path = os.path.join(Config.OUTPUT_FOLDER, out_filename)
+        cv2.imwrite(out_path, annotated_image)
+
+        # Compute per-image metrics
+        total_onions_img = len(items)
+        h_cnt = class_counts.get("Healthy", 0)
+        d_cnt = class_counts.get("Damaged", 0)
+        r_cnt = class_counts.get("Rotten", 0)
+        s_cnt = class_counts.get("Sprouted", 0)
+        u_cnt = class_counts.get("Uncertain", 0)
+
+        h_pct = round((h_cnt / total_onions_img * 100) if total_onions_img else 0, 1)
+        d_pct = round((d_cnt / total_onions_img * 100) if total_onions_img else 0, 1)
+        r_pct = round((r_cnt / total_onions_img * 100) if total_onions_img else 0, 1)
+        s_pct = round((s_cnt / total_onions_img * 100) if total_onions_img else 0, 1)
+        u_pct = round((u_cnt / total_onions_img * 100) if total_onions_img else 0, 1)
+
+        g_a = h_cnt
+        u_rs = d_cnt
+        rej = r_cnt + s_cnt
+
+        g_a_pct = round((g_a / total_onions_img * 100) if total_onions_img else 0, 1)
+        u_rs_pct = round((u_rs / total_onions_img * 100) if total_onions_img else 0, 1)
+        rej_pct = round((rej / total_onions_img * 100) if total_onions_img else 0, 1)
 
         per_image_results.append({
             "image_order": order_idx,
             "original_image_path": img_path,
             "original_filename": os.path.basename(img_path),
-            "annotated_image_path": res["annotated_image_path"],
-            "annotated_image_filename": res["annotated_image_filename"],
-            "annotated_url": f"/outputs/{res['annotated_image_filename']}",
-            "total_onions": res["total_onions"],
-            "classes": res["classes"],
-            "grades": res["grades"],
+            "annotated_image_path": out_path,
+            "annotated_image_filename": out_filename,
+            "annotated_url": f"/outputs/{out_filename}",
+            "total_onions": total_onions_img,
+            "classes": {
+                "Healthy": {"count": h_cnt, "percentage": h_pct},
+                "Damaged": {"count": d_cnt, "percentage": d_pct},
+                "Rotten": {"count": r_cnt, "percentage": r_pct},
+                "Sprouted": {"count": s_cnt, "percentage": s_pct},
+                "Uncertain": {"count": u_cnt, "percentage": u_pct}
+            },
+            "grades": {
+                "Grade A": {"count": g_a, "percentage": g_a_pct},
+                "URS": {"count": u_rs, "percentage": u_rs_pct},
+                "Rejected": {"count": rej, "percentage": rej_pct}
+            },
             "detections": tagged_detections
         })
 
@@ -284,6 +441,7 @@ def evaluate_multiple_onion_images(image_paths, yolo_conf=None, classifier_conf=
     uncertain_pct = round((uncertain_count / total_onions * 100) if total_onions else 0, 1)
 
     # Aggregated Grading mapping
+    # Uncertain remains separate and is not assigned to any grade
     grade_a = healthy_count
     urs = damaged_count
     rejected = rotten_count + sprouted_count
@@ -330,6 +488,13 @@ def evaluate_multiple_onion_images(image_paths, yolo_conf=None, classifier_conf=
         primary_annotated_path = create_annotated_collage(annotated_paths)
     else:
         primary_annotated_path = annotated_paths[0]
+
+    total_pipeline_time = time.perf_counter() - pipeline_start
+    print(
+        f"[AI Pipeline Timing] Images: {total_images} | Total Onions: {total_onions} | "
+        f"YOLO Total: {yolo_time:.3f}s | Global Classifier Batch: {cls_time:.3f}s | "
+        f"Total Pipeline: {total_pipeline_time:.3f}s"
+    )
 
     return {
         "total_images": total_images,

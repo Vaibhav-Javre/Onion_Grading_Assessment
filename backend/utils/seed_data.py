@@ -1,15 +1,17 @@
 import os
 import shutil
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
+
 from backend.database.db import db
-from backend.models.user import User
+from backend.models.evaluation import Evaluation, EvaluationItem
 from backend.models.farmer import FarmerProfile
 from backend.models.officer import OfficerProfile
-from backend.models.evaluation import Evaluation, EvaluationItem
 from backend.models.report import Report
-from backend.services.pdf_service import generate_evaluation_pdf
+from backend.models.user import User
 from backend.services.market_price_service import MarketPriceService
+from backend.services.pdf_service import generate_evaluation_pdf
 from config import Config
+
 
 def seed_demo_data():
     """
@@ -18,6 +20,42 @@ def seed_demo_data():
     """
     # Seed Mandi market prices
     MarketPriceService.seed_or_update_benchmark_prices()
+
+    # Ensure Government Admin account exists
+    from backend.models.transaction import ProcurementTransaction
+    from backend.utils.audit_helpers import record_audit_log
+    from backend.utils.transaction_helpers import create_transaction_for_evaluation
+
+    gov_user = User.query.filter_by(role="government").first()
+    if not gov_user:
+        print("[SeedData] Seeding default Government Official Admin...")
+        gov_user = User(
+            name="Dr. A. Sharma, IAS",
+            email="admin@agri.gov.in",
+            phone="9112233440",
+            role="government"
+        )
+        gov_user.set_password("GovAdmin@2026")
+        db.session.add(gov_user)
+        db.session.commit()
+        record_audit_log(
+            action="SYSTEM_INIT",
+            entity_type="user",
+            entity_id=str(gov_user.id),
+            details={"message": "Default Government Administrator initialized", "email": gov_user.email},
+            user=gov_user
+        )
+    else:
+        # Keep password updated with secure uncompromised password
+        gov_user.set_password("GovAdmin@2026")
+        db.session.commit()
+
+    # Sync transactions for any existing confirmed evaluations
+    confirmed_evals = Evaluation.query.filter_by(status="confirmed").all()
+    for ev in confirmed_evals:
+        if not ProcurementTransaction.query.filter_by(evaluation_id=ev.id).first():
+            create_transaction_for_evaluation(ev, commit=False)
+    db.session.commit()
 
     # Check if officer already exists
     existing_officer_user = User.query.filter_by(role="officer").first()
@@ -181,7 +219,7 @@ def seed_demo_data():
     ))
 
     # Generate PDF for Report 1
-    pdf_fn, pdf_fp, pdf_size = generate_evaluation_pdf(eval1)
+    _pdf_fn, pdf_fp, pdf_size = generate_evaluation_pdf(eval1)
     rep1 = Report(
         evaluation_id=eval1.id,
         pdf_path=pdf_fp,
@@ -218,13 +256,17 @@ def seed_demo_data():
     db.session.add(eval2)
     db.session.flush()
 
-    pdf_fn2, pdf_fp2, pdf_size2 = generate_evaluation_pdf(eval2)
+    _pdf_fn2, pdf_fp2, pdf_size2 = generate_evaluation_pdf(eval2)
     rep2 = Report(
         evaluation_id=eval2.id,
         pdf_path=pdf_fp2,
         file_size_bytes=pdf_size2
     )
     db.session.add(rep2)
+    db.session.flush()
+
+    create_transaction_for_evaluation(eval1, commit=False)
+    create_transaction_for_evaluation(eval2, commit=False)
 
     db.session.commit()
     print("[SeedData] Demo seed completed successfully.")

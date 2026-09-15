@@ -1,4 +1,5 @@
 from flask import Blueprint, jsonify, request
+
 from backend.services.market_price_service import MarketPriceService
 from backend.services.price_engine import PriceEngine
 
@@ -19,7 +20,7 @@ def get_lasalgaon_reference():
     except Exception as e:
         return jsonify({
             "success": False,
-            "error": f"Failed to retrieve Lasalgaon reference price: {str(e)}"
+            "error": f"Failed to retrieve Lasalgaon reference price: {e!s}"
         }), 500
 
 @market_bp.route("/prices", methods=["GET"])

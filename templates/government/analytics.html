@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+
+{% block title %}Macro Analytics & Insights - Government Portal{% endblock %}
+{% block page_title %}Macro Quality Intelligence & Procurement Analytics{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h1 style="font-size: 1.65rem; color: #0b2545;">Procurement Intelligence & Trends</h1>
+    <p style="color: var(--text-muted); font-size: 0.9rem;">
+      Macro-level quality analytics, district performance metrics, Mandi throughput, and historical evaluation trends.
+    </p>
+  </div>
+  <div>
+    <button onclick="fetchAnalytics()" class="btn btn-sm btn-outline">
+      🔄 Refresh Visualizations
+    </button>
+  </div>
+</div>
+
+<!-- Charts Grid -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.75rem;">
+  <!-- Grade Distribution Chart -->
+  <div class="card" style="margin-bottom: 0;">
+    <div class="card-header">
+      <h3>Cumulative Grade Categorization</h3>
+      <span class="badge badge-info">Grade A vs URS vs Rejected</span>
+    </div>
+    <div style="height: 300px; padding: 0.5rem;">
+      <canvas id="analyticsGradeChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Quality Classes Breakdown -->
+  <div class="card" style="margin-bottom: 0;">
+    <div class="card-header">
+      <h3>AI Four-Class Defect Distribution</h3>
+      <span class="badge badge-info">Healthy vs Damaged vs Rotten vs Sprouted</span>
+    </div>
+    <div style="height: 300px; padding: 0.5rem;">
+      <canvas id="analyticsClassChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- Full Width Trend Chart -->
+<div class="card" style="margin-bottom: 1.75rem;">
+  <div class="card-header">
+    <h3>Monthly Evaluation Activity & Quality Output</h3>
+    <span class="badge badge-success">Historical Trend</span>
+  </div>
+  <div style="height: 320px; padding: 0.5rem;">
+    <canvas id="monthlyTrendChart"></canvas>
+  </div>
+</div>
+
+<!-- District & Center Charts Grid -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.75rem;">
+  <!-- District Comparisons -->
+  <div class="card" style="margin-bottom: 0;">
+    <div class="card-header">
+      <h3>District-Wise Evaluation Volume</h3>
+      <span class="badge badge-info">Nashik, Pune, etc.</span>
+    </div>
+    <div style="height: 300px; padding: 0.5rem;">
+      <canvas id="districtVolumeChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Procurement Center Throughput -->
+  <div class="card" style="margin-bottom: 0;">
+    <div class="card-header">
+      <h3>Center-Wise Procurement Throughput</h3>
+      <span class="badge badge-info">APMC Mandi Yards</span>
+    </div>
+    <div style="height: 300px; padding: 0.5rem;">
+      <canvas id="centerThroughputChart"></canvas>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let chartGrade = null;
+let chartClass = null;
+let chartTrend = null;
+let chartDistrict = null;
+let chartCenter = null;
+
+document.addEventListener("DOMContentLoaded", () => {
+  fetchAnalytics();
+});
+
+async function fetchAnalytics() {
+  try {
+    const res = await fetch("/api/government/analytics");
+    const data = await res.json();
+    if (!data.success) {
+      showToast(data.error || "Failed to load analytics.", "error");
+      return;
+    }
+
+    renderGradeChart(data.grade_distribution);
+    renderClassChart(data.quality_class_distribution);
+    renderMonthlyTrendChart(data.monthly_trends);
+    renderDistrictChart(data.district_stats);
+    renderCenterChart(data.center_stats);
+
+  } catch (err) {
+    console.error("Analytics error:", err);
+    showToast("Network error loading analytics.", "error");
+  }
+}
+
+function renderGradeChart(dist) {
+  const ctx = document.getElementById("analyticsGradeChart").getContext("2d");
+  if (chartGrade) chartGrade.destroy();
+
+  chartGrade = new Chart(ctx, {
+    type: "pie",
+    data: {
+      labels: dist.labels,
+      datasets: [{
+        data: dist.counts,
+        backgroundColor: ["#16a34a", "#d97706", "#dc2626"],
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: "bottom" } }
+    }
+  });
+}
+
+function renderClassChart(dist) {
+  const ctx = document.getElementById("analyticsClassChart").getContext("2d");
+  if (chartClass) chartClass.destroy();
+
+  chartClass = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: dist.labels,
+      datasets: [{
+        label: "Bulbs Detected",
+        data: dist.counts,
+        backgroundColor: ["#10b981", "#f59e0b", "#ef4444", "#8b5cf6"],
+        borderRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, grid: { color: "#f1f5f9" } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+function renderMonthlyTrendChart(trends) {
+  const ctx = document.getElementById("monthlyTrendChart").getContext("2d");
+  if (chartTrend) chartTrend.destroy();
+
+  const labels = trends.map(t => t.month);
+  const evals = trends.map(t => t.evaluations);
+  const ga = trends.map(t => t.grade_a);
+  const urs = trends.map(t => t.urs);
+  const rej = trends.map(t => t.rejected);
+
+  chartTrend = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: labels.length ? labels : ["Current Month"],
+      datasets: [
+        {
+          label: "Batches Evaluated",
+          data: evals.length ? evals : [0],
+          borderColor: "#0284c7",
+          backgroundColor: "rgba(2, 132, 199, 0.1)",
+          fill: true,
+          tension: 0.3
+        },
+        {
+          label: "Grade A Output",
+          data: ga.length ? ga : [0],
+          borderColor: "#16a34a",
+          backgroundColor: "transparent",
+          borderDash: [5, 5],
+          tension: 0.3
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: "top" } },
+      scales: {
+        y: { beginAtZero: true, grid: { color: "#f1f5f9" } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+function renderDistrictChart(stats) {
+  const ctx = document.getElementById("districtVolumeChart").getContext("2d");
+  if (chartDistrict) chartDistrict.destroy();
+
+  const labels = stats.map(s => s.district);
+  const onions = stats.map(s => s.total_onions || s.onions);
+
+  chartDistrict = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: labels.length ? labels : ["None"],
+      datasets: [{
+        label: "Onions Evaluated",
+        data: onions.length ? onions : [0],
+        backgroundColor: "#3b82f6",
+        borderRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+function renderCenterChart(stats) {
+  const ctx = document.getElementById("centerThroughputChart").getContext("2d");
+  if (chartCenter) chartCenter.destroy();
+
+  const labels = stats.map(s => s.center.replace("Procurement Yard", "").replace("APMC", "").trim());
+  const evals = stats.map(s => s.evaluations);
+
+  chartCenter = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: labels.length ? labels : ["Default"],
+      datasets: [{
+        label: "Evaluations Completed",
+        data: evals.length ? evals : [0],
+        backgroundColor: "#059669",
+        borderRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+}
+</script>
+{% endblock %}

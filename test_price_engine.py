@@ -1,10 +1,10 @@
-import os
 import unittest
+
 from app import create_app
-from backend.database.db import db
 from backend.models.evaluation import Evaluation
 from backend.services.price_engine import PriceEngine
 from config import Config
+
 
 class TestPriceEngine(unittest.TestCase):
     def setUp(self):

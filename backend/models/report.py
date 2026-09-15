@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
+
 from backend.database.db import db
+
 
 class Report(db.Model):
     __tablename__ = "reports"

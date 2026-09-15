@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+
+{% block title %}Digital Transactions Ledger - Government Portal{% endblock %}
+{% block page_title %}Official Procurement Transactions Ledger{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h1 style="font-size: 1.65rem; color: #0b2545;">Digital Procurement Transactions</h1>
+    <p style="color: var(--text-muted); font-size: 0.9rem;">
+      Immutable digital record ledger of confirmed onion lots, grade counts, benchmark pricing, and direct farmer payout settlements.
+    </p>
+  </div>
+  <div style="display: flex; gap: 0.75rem;">
+    <button onclick="exportTransactionsCsv()" class="btn btn-sm btn-outline" style="background: #ffffff;">
+      📥 Export CSV
+    </button>
+    <button onclick="fetchTransactions()" class="btn btn-sm btn-outline">
+      🔄 Refresh
+    </button>
+  </div>
+</div>
+
+<!-- Search & Advanced Filter Card -->
+<div class="card" style="margin-bottom: 1.5rem; padding: 1.25rem;">
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.85rem; align-items: flex-end;">
+    <div class="form-group" style="margin-bottom: 0;">
+      <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">Global Search</label>
+      <input type="text" id="txnSearchInput" class="form-control" placeholder="TXN-..., Report, Farmer, Center...">
+    </div>
+    <div class="form-group" style="margin-bottom: 0;">
+      <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">Grading Result</label>
+      <select id="txnResultSelect" class="form-control">
+        <option value="all">All Results</option>
+        <option value="Grade A">Grade A</option>
+        <option value="URS">URS Standard</option>
+        <option value="Rejected">Rejected</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom: 0;">
+      <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">From Date</label>
+      <input type="date" id="txnFromDate" class="form-control">
+    </div>
+    <div class="form-group" style="margin-bottom: 0;">
+      <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">To Date</label>
+      <input type="date" id="txnToDate" class="form-control">
+    </div>
+    <div>
+      <button onclick="fetchTransactions()" class="btn btn-primary" style="width: 100%; height: 42px;">
+        Apply Filters
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Transactions Table Card -->
+<div class="card">
+  <div class="card-header">
+    <h3>Transaction Records (<span id="txnsCount">0</span>)</h3>
+  </div>
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Transaction ID</th>
+          <th>Report ID</th>
+          <th>Date & Time</th>
+          <th>Farmer</th>
+          <th>Officer & Center</th>
+          <th>Total Bulbs</th>
+          <th>Grade Counts</th>
+          <th>Final Result</th>
+          <th>Mandi Price</th>
+          <th>Quantity</th>
+          <th>Total Payout</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="transactionsTableBody">
+        <tr><td colspan="12" style="text-align: center; padding: 2.5rem;">Loading procurement transactions...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Transaction Detail Modal -->
+<div id="txnDetailModal" style="display: none; position: fixed; inset: 0; z-index: 100; background: rgba(0, 0, 0, 0.5); align-items: center; justify-content: center; padding: 1.5rem;">
+  <div style="background: #ffffff; border-radius: var(--radius-lg); max-width: 750px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 2rem; box-shadow: var(--shadow-xl); position: relative;">
+    <button onclick="closeTxnModal()" style="position: absolute; top: 1.25rem; right: 1.25rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b;">
+      ✕
+    </button>
+    
+    <div style="border-bottom: 1px solid #e2e8f0; padding-bottom: 1rem; margin-bottom: 1.5rem;">
+      <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.25rem;">
+        <span class="badge" style="background: #e0f2fe; color: #0369a1; font-family: monospace; font-size: 0.95rem; font-weight: 700;" id="modalTxnId"></span>
+        <span class="badge" id="modalTxnBadge"></span>
+      </div>
+      <p style="color: #64748b; font-size: 0.85rem;" id="modalTxnTimestamp"></p>
+    </div>
+
+    <!-- Stakeholder Details Grid -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+      <div style="background: #f8fafc; padding: 1rem; border-radius: var(--radius-md); border: 1px solid #e2e8f0;">
+        <div style="font-size: 0.75rem; text-transform: uppercase; color: #64748b; font-weight: 700; margin-bottom: 0.5rem;">Farmer Details</div>
+        <div style="font-weight: 700; color: #0b2545;" id="modalFarmerName"></div>
+        <div style="font-size: 0.85rem; color: #334155;" id="modalFarmerId"></div>
+        <div style="font-size: 0.85rem; color: #64748b;" id="modalFarmerLoc"></div>
+      </div>
+      <div style="background: #f8fafc; padding: 1rem; border-radius: var(--radius-md); border: 1px solid #e2e8f0;">
+        <div style="font-size: 0.75rem; text-transform: uppercase; color: #64748b; font-weight: 700; margin-bottom: 0.5rem;">Procurement Officer</div>
+        <div style="font-weight: 700; color: #0b2545;" id="modalOfficerName"></div>
+        <div style="font-size: 0.85rem; color: #334155;" id="modalOfficerId"></div>
+        <div style="font-size: 0.85rem; color: #64748b;" id="modalOfficerCenter"></div>
+      </div>
+    </div>
+
+    <!-- Quality Breakdown Table -->
+    <h4 style="margin-bottom: 0.75rem; color: #0b2545;">AI Quality & Grade Breakdown</h4>
+    <div class="table-responsive" style="margin-bottom: 1.5rem;">
+      <table class="data-table" style="font-size: 0.85rem;">
+        <thead>
+          <tr>
+            <th>Quality Metric</th>
+            <th>Count</th>
+            <th>Percentage</th>
+            <th>Grading Classification</th>
+          </tr>
+        </thead>
+        <tbody id="modalQualityTableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Financial Breakdown -->
+    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-md); padding: 1.25rem; margin-bottom: 1.5rem;">
+      <h4 style="color: #166534; margin-bottom: 0.75rem;">Financial Settlement Summary</h4>
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; text-align: center;">
+        <div>
+          <div style="font-size: 0.75rem; color: #166534; text-transform: uppercase;">Benchmark Price</div>
+          <div style="font-size: 1.2rem; font-weight: 800; color: #0f172a;" id="modalBenchmarkPrice">₹0/Q</div>
+        </div>
+        <div>
+          <div style="font-size: 0.75rem; color: #166534; text-transform: uppercase;">Quantity Procured</div>
+          <div style="font-size: 1.2rem; font-weight: 800; color: #0f172a;" id="modalQuantity">0 Q</div>
+        </div>
+        <div>
+          <div style="font-size: 0.75rem; color: #166534; text-transform: uppercase;">Total Payout</div>
+          <div style="font-size: 1.35rem; font-weight: 800; color: #15803d;" id="modalTotalPayout">₹0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer Actions -->
+    <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e2e8f0; padding-top: 1rem;">
+      <span style="font-size: 0.8rem; color: #64748b;" id="modalAuditTimestamp"></span>
+      <a id="modalPdfLink" href="#" target="_blank" class="btn btn-primary btn-sm">
+        📄 Download Certified PDF
+      </a>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let transactionsCache = [];
+
+document.addEventListener("DOMContentLoaded", () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const searchParam = urlParams.get("search");
+  if (searchParam) {
+    document.getElementById("txnSearchInput").value = searchParam;
+  }
+  fetchTransactions();
+});
+
+async function fetchTransactions() {
+  const search = document.getElementById("txnSearchInput").value.trim();
+  const result = document.getElementById("txnResultSelect").value;
+  const fromDate = document.getElementById("txnFromDate").value;
+  const toDate = document.getElementById("txnToDate").value;
+
+  const params = new URLSearchParams();
+  if (search) params.append("search", search);
+  if (result && result !== "all") params.append("result", result);
+  if (fromDate) params.append("from_date", fromDate);
+  if (toDate) params.append("to_date", toDate);
+
+  try {
+    const res = await fetch(`/api/government/transactions?${params.toString()}`);
+    const data = await res.json();
+    if (!data.success) {
+      showToast(data.error || "Failed to load transactions.", "error");
+      return;
+    }
+
+    transactionsCache = data.transactions;
+    document.getElementById("txnsCount").textContent = data.count;
+    renderTransactionsTable(data.transactions);
+  } catch (err) {
+    console.error("Txn fetch error:", err);
+    showToast("Network error loading transactions.", "error");
+  }
+}
+
+function exportTransactionsCsv() {
+  const search = document.getElementById("txnSearchInput").value.trim();
+  const result = document.getElementById("txnResultSelect").value;
+  const fromDate = document.getElementById("txnFromDate").value;
+  const toDate = document.getElementById("txnToDate").value;
+
+  const params = new URLSearchParams();
+  params.append("export", "csv");
+  if (search) params.append("search", search);
+  if (result && result !== "all") params.append("result", result);
+  if (fromDate) params.append("from_date", fromDate);
+  if (toDate) params.append("to_date", toDate);
+
+  window.location.href = `/api/government/transactions?${params.toString()}`;
+}
+
+function renderTransactionsTable(txns) {
+  const tbody = document.getElementById("transactionsTableBody");
+  if (!txns || txns.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align: center; padding: 2.5rem; color: #64748b;">No matching transaction records found.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = txns.map((t, idx) => `
+    <tr>
+      <td><span class="badge" style="background: #e0f2fe; color: #0369a1; font-family: monospace; font-weight: 700;">${t.transaction_id}</span></td>
+      <td><a href="/reports/download/Onion_Report_${t.report_id}.pdf" target="_blank" style="color: #0284c7; font-weight: 600;">${t.report_id}</a></td>
+      <td style="font-size: 0.85rem; color: #64748b;">${t.transaction_date}</td>
+      <td><b>${t.farmer.name}</b><div style="font-size: 0.75rem; color: #64748b;">${t.farmer.farmer_id}</div></td>
+      <td style="font-size: 0.85rem;"><b>${t.officer.name}</b><div style="font-size: 0.75rem; color: #64748b;">${t.procurement_center}</div></td>
+      <td style="font-weight: 700;">${t.counts.total_onions}</td>
+      <td>
+        <span style="color: #16a34a; font-weight: 600;">${t.counts.grade_a} A</span> •
+        <span style="color: #d97706; font-weight: 600;">${t.counts.urs} URS</span> •
+        <span style="color: #dc2626; font-weight: 600;">${t.counts.rejected} Rej</span>
+      </td>
+      <td>
+        <span class="badge ${t.final_result.includes('Grade A') ? 'badge-grade-a' : t.final_result.includes('URS') ? 'badge-grade-urs' : 'badge-grade-rej'}">
+          ${t.final_result}
+        </span>
+      </td>
+      <td>₹${t.economics.market_price || 0}/Q</td>
+      <td>${t.economics.quantity_quintals} Q</td>
+      <td style="font-weight: 700; color: #0f172a;">₹${t.economics.total_payout.toLocaleString()}</td>
+      <td>
+        <button onclick="viewTxnDetails(${idx})" class="btn btn-sm btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;">
+          Breakdown
+        </button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+function viewTxnDetails(idx) {
+  const t = transactionsCache[idx];
+  if (!t) return;
+
+  document.getElementById("modalTxnId").textContent = t.transaction_id;
+  const badge = document.getElementById("modalTxnBadge");
+  badge.textContent = t.final_result;
+  badge.className = `badge ${t.final_result.includes('Grade A') ? 'badge-grade-a' : 'badge-grade-urs'}`;
+  document.getElementById("modalTxnTimestamp").textContent = `Confirmed on: ${t.transaction_date} • Linked Report: ${t.report_id}`;
+
+  document.getElementById("modalFarmerName").textContent = t.farmer.name;
+  document.getElementById("modalFarmerId").textContent = `ID: ${t.farmer.farmer_id} • Mobile: ${t.farmer.phone}`;
+  document.getElementById("modalFarmerLoc").textContent = `${t.farmer.village}, ${t.district}, ${t.state}`;
+
+  document.getElementById("modalOfficerName").textContent = t.officer.name;
+  document.getElementById("modalOfficerId").textContent = `ID: ${t.officer.officer_id}`;
+  document.getElementById("modalOfficerCenter").textContent = `${t.procurement_center} (${t.officer.location})`;
+
+  // Quality table
+  const tbody = document.getElementById("modalQualityTableBody");
+  tbody.innerHTML = `
+    <tr><td>Healthy Bulbs</td><td><b>${t.counts.healthy}</b></td><td>${t.percentages.healthy}%</td><td><span class="badge badge-grade-a">Grade A</span></td></tr>
+    <tr><td>Damaged Bulbs</td><td><b>${t.counts.damaged}</b></td><td>${t.percentages.damaged}%</td><td><span class="badge badge-grade-urs">URS Standard</span></td></tr>
+    <tr><td>Rotten Bulbs</td><td><b>${t.counts.rotten}</b></td><td>${t.percentages.rotten}%</td><td><span class="badge badge-grade-rej">Rejected</span></td></tr>
+    <tr><td>Sprouted Bulbs</td><td><b>${t.counts.sprouted}</b></td><td>${t.percentages.sprouted}%</td><td><span class="badge badge-grade-rej">Rejected</span></td></tr>
+  `;
+
+  document.getElementById("modalBenchmarkPrice").textContent = `₹${t.economics.market_price || 0}/Q`;
+  document.getElementById("modalQuantity").textContent = `${t.economics.quantity_quintals} Quintals`;
+  document.getElementById("modalTotalPayout").textContent = `₹${t.economics.total_payout.toLocaleString()}`;
+
+  document.getElementById("modalAuditTimestamp").textContent = `Audit Logged: ${t.created_at}`;
+  document.getElementById("modalPdfLink").href = `/reports/download/Onion_Report_${t.report_id}.pdf`;
+
+  document.getElementById("txnDetailModal").style.display = "flex";
+}
+
+function closeTxnModal() {
+  document.getElementById("txnDetailModal").style.display = "none";
+}
+</script>
+{% endblock %}

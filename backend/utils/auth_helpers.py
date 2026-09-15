@@ -1,9 +1,12 @@
 import random
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import wraps
-from flask import session, redirect, url_for, flash, request, jsonify, abort
-from backend.models.user import User
+
+from flask import flash, jsonify, redirect, request, session, url_for
+
 from backend.database.db import db
+from backend.models.user import User
+
 
 def get_current_user():
     user_id = session.get("user_id")
@@ -41,6 +44,8 @@ def role_required(*allowed_roles):
                     return redirect(url_for("views.farmer_dashboard"))
                 elif current_role == "officer":
                     return redirect(url_for("views.officer_dashboard"))
+                elif current_role in ("government", "admin"):
+                    return redirect(url_for("views.government_dashboard"))
                 return redirect(url_for("views.home"))
             return f(*args, **kwargs)
         return decorated_function
@@ -48,7 +53,7 @@ def role_required(*allowed_roles):
 
 def generate_farmer_id():
     """Generates unique ID like FMR-2026-0001"""
-    year = datetime.now().year
+    year = datetime.now(timezone.utc).year
     from backend.models.farmer import FarmerProfile
     count = db.session.query(FarmerProfile).count() + 1
     # Check uniqueness
@@ -60,7 +65,7 @@ def generate_farmer_id():
 
 def generate_officer_id():
     """Generates unique ID like OFF-2026-001"""
-    year = datetime.now().year
+    year = datetime.now(timezone.utc).year
     from backend.models.officer import OfficerProfile
     count = db.session.query(OfficerProfile).count() + 1
     while True:
@@ -71,7 +76,7 @@ def generate_officer_id():
 
 def generate_report_id():
     """Generates unique ID like ONR-2026-000124"""
-    year = datetime.now().year
+    year = datetime.now(timezone.utc).year
     from backend.models.evaluation import Evaluation
     count = db.session.query(Evaluation).count() + 1
     # Add a pseudo-random 3-digit salt or sequential

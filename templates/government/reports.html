@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+
+{% block title %}Quality Reports Management - Government Portal{% endblock %}
+{% block page_title %}National Quality Assessment Reports Archive{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h1 style="font-size: 1.65rem; color: #0b2545;">Certified Quality Assessment Archive</h1>
+    <p style="color: var(--text-muted); font-size: 0.9rem;">
+      Central repository of confirmed AI assessment reports, bounding box photo evidence, and official PDF certificates.
+    </p>
+  </div>
+  <div style="display: flex; gap: 0.75rem;">
+    <button onclick="exportReportsCsv()" class="btn btn-sm btn-outline" style="background: #ffffff;">
+      📥 Export CSV
+    </button>
+    <button onclick="fetchReports()" class="btn btn-sm btn-outline">
+      🔄 Refresh
+    </button>
+  </div>
+</div>
+
+<!-- Filters Card -->
+<div class="card" style="margin-bottom: 1.5rem; padding: 1.25rem;">
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.85rem; align-items: flex-end;">
+    <div class="form-group" style="margin-bottom: 0;">
+      <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">Search Report / Farmer / Officer</label>
+      <input type="text" id="repSearchInput" class="form-control" placeholder="Report code, name, phone...">
+    </div>
+    <div class="form-group" style="margin-bottom: 0;">
+      <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">District</label>
+      <select id="repDistrictSelect" class="form-control">
+        <option value="all">All Districts</option>
+        <option value="Nashik">Nashik</option>
+        <option value="Ahmednagar">Ahmednagar</option>
+        <option value="Pune">Pune</option>
+        <option value="Solapur">Solapur</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom: 0;">
+      <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">Result</label>
+      <select id="repResultSelect" class="form-control">
+        <option value="all">All Results</option>
+        <option value="Grade A">Grade A</option>
+        <option value="URS">URS Standard</option>
+        <option value="Rejected">Rejected</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom: 0;">
+      <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">From Date</label>
+      <input type="date" id="repFromDate" class="form-control">
+    </div>
+    <div class="form-group" style="margin-bottom: 0;">
+      <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">To Date</label>
+      <input type="date" id="repToDate" class="form-control">
+    </div>
+    <div>
+      <button onclick="fetchReports()" class="btn btn-primary" style="width: 100%; height: 42px;">
+        Apply Filters
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Reports Table Card -->
+<div class="card">
+  <div class="card-header">
+    <h3>Official Certified Reports (<span id="reportsCount">0</span>)</h3>
+  </div>
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Report Code</th>
+          <th>Assessment Date</th>
+          <th>Farmer Profile</th>
+          <th>Mandi Officer</th>
+          <th>District</th>
+          <th>Bulbs</th>
+          <th>Grade Breakdown</th>
+          <th>Overall Standard</th>
+          <th>Rate / Payout</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="reportsTableBody">
+        <tr><td colspan="10" style="text-align: center; padding: 2.5rem;">Loading quality assessment reports...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Report Detail Modal -->
+<div id="reportDetailModal" style="display: none; position: fixed; inset: 0; z-index: 100; background: rgba(0, 0, 0, 0.5); align-items: center; justify-content: center; padding: 1.5rem;">
+  <div style="background: #ffffff; border-radius: var(--radius-lg); max-width: 850px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 2rem; box-shadow: var(--shadow-xl); position: relative;">
+    <button onclick="closeReportModal()" style="position: absolute; top: 1.25rem; right: 1.25rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b;">
+      ✕
+    </button>
+    
+    <div style="border-bottom: 1px solid #e2e8f0; padding-bottom: 1rem; margin-bottom: 1.5rem;">
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <h2 id="modalRepId" style="color: #0b2545;">Report Details</h2>
+        <span id="modalRepBadge" class="badge"></span>
+      </div>
+      <p id="modalRepMeta" style="color: #64748b; font-size: 0.85rem; margin-top: 0.25rem;"></p>
+    </div>
+
+    <!-- Annotated Image Preview -->
+    <div style="margin-bottom: 1.5rem;">
+      <h4 style="margin-bottom: 0.5rem; color: #0b2545;">AI Multi-Object Detection Annotation</h4>
+      <div style="background: #000; border-radius: var(--radius-md); overflow: hidden; text-align: center; max-height: 380px;">
+        <img id="modalAnnotatedImg" src="" alt="Annotated Evaluation Image" style="max-height: 380px; width: auto; max-width: 100%; object-fit: contain;">
+      </div>
+    </div>
+
+    <!-- Summary Text -->
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: var(--radius-md); padding: 1rem; margin-bottom: 1.5rem;">
+      <div style="font-size: 0.75rem; text-transform: uppercase; color: #64748b; font-weight: 700; margin-bottom: 0.25rem;">Quality Executive Summary</div>
+      <p id="modalQualitySummary" style="font-size: 0.9rem; color: #334155; line-height: 1.5;"></p>
+    </div>
+
+    <!-- Itemized Grid Breakdown -->
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; text-align: center; margin-bottom: 1.5rem;">
+      <div style="background: #dcfce7; padding: 0.75rem; border-radius: var(--radius-sm);">
+        <div style="font-size: 0.75rem; color: #166534; font-weight: 600;">Healthy (Grade A)</div>
+        <div id="modalCountHealthy" style="font-size: 1.4rem; font-weight: 800; color: #166534;">0</div>
+      </div>
+      <div style="background: #fef3c7; padding: 0.75rem; border-radius: var(--radius-sm);">
+        <div style="font-size: 0.75rem; color: #92400e; font-weight: 600;">Damaged (URS)</div>
+        <div id="modalCountDamaged" style="font-size: 1.4rem; font-weight: 800; color: #92400e;">0</div>
+      </div>
+      <div style="background: #fee2e2; padding: 0.75rem; border-radius: var(--radius-sm);">
+        <div style="font-size: 0.75rem; color: #991b1b; font-weight: 600;">Rotten (Rejected)</div>
+        <div id="modalCountRotten" style="font-size: 1.4rem; font-weight: 800; color: #991b1b;">0</div>
+      </div>
+      <div style="background: #f3e8ff; padding: 0.75rem; border-radius: var(--radius-sm);">
+        <div style="font-size: 0.75rem; color: #6b21a8; font-weight: 600;">Sprouted (Rejected)</div>
+        <div id="modalCountSprouted" style="font-size: 1.4rem; font-weight: 800; color: #6b21a8;">0</div>
+      </div>
+    </div>
+
+    <!-- Footer Actions -->
+    <div style="display: flex; justify-content: flex-end; gap: 1rem; border-top: 1px solid #e2e8f0; padding-top: 1rem;">
+      <button onclick="closeReportModal()" class="btn btn-outline btn-sm">Close</button>
+      <a id="modalDownloadPdfBtn" href="#" target="_blank" class="btn btn-primary btn-sm">
+        📄 Download Certified PDF
+      </a>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let reportsCache = [];
+
+document.addEventListener("DOMContentLoaded", () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const searchParam = urlParams.get("search");
+  if (searchParam) {
+    document.getElementById("repSearchInput").value = searchParam;
+  }
+  fetchReports();
+});
+
+async function fetchReports() {
+  const search = document.getElementById("repSearchInput").value.trim();
+  const district = document.getElementById("repDistrictSelect").value;
+  const result = document.getElementById("repResultSelect").value;
+  const fromDate = document.getElementById("repFromDate").value;
+  const toDate = document.getElementById("repToDate").value;
+
+  const params = new URLSearchParams();
+  if (search) params.append("search", search);
+  if (district && district !== "all") params.append("district", district);
+  if (result && result !== "all") params.append("result", result);
+  if (fromDate) params.append("from_date", fromDate);
+  if (toDate) params.append("to_date", toDate);
+
+  try {
+    const res = await fetch(`/api/government/reports?${params.toString()}`);
+    const data = await res.json();
+    if (!data.success) {
+      showToast(data.error || "Failed to load reports.", "error");
+      return;
+    }
+
+    reportsCache = data.reports;
+    document.getElementById("reportsCount").textContent = data.count;
+    renderReportsTable(data.reports);
+  } catch (err) {
+    console.error("Reports fetch error:", err);
+    showToast("Network error loading reports.", "error");
+  }
+}
+
+function exportReportsCsv() {
+  const search = document.getElementById("repSearchInput").value.trim();
+  const district = document.getElementById("repDistrictSelect").value;
+  const result = document.getElementById("repResultSelect").value;
+  const fromDate = document.getElementById("repFromDate").value;
+  const toDate = document.getElementById("repToDate").value;
+
+  const params = new URLSearchParams();
+  params.append("export", "csv");
+  if (search) params.append("search", search);
+  if (district && district !== "all") params.append("district", district);
+  if (result && result !== "all") params.append("result", result);
+  if (fromDate) params.append("from_date", fromDate);
+  if (toDate) params.append("to_date", toDate);
+
+  window.location.href = `/api/government/reports?${params.toString()}`;
+}
+
+function renderReportsTable(reports) {
+  const tbody = document.getElementById("reportsTableBody");
+  if (!reports || reports.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; padding: 2.5rem; color: #64748b;">No matching assessment reports found.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = reports.map((r, idx) => `
+    <tr>
+      <td><b>${r.report_id || 'ONR-' + r.id}</b></td>
+      <td style="font-size: 0.85rem; color: #64748b;">${r.evaluation_date}</td>
+      <td><b>${r.farmer ? r.farmer.name : 'Farmer'}</b><div style="font-size: 0.75rem; color: #64748b;">${r.farmer ? r.farmer.farmer_id : ''}</div></td>
+      <td style="font-size: 0.85rem;">${r.officer ? r.officer.name : 'Officer'}<div style="font-size: 0.75rem; color: #64748b;">${r.officer ? r.officer.procurement_center : ''}</div></td>
+      <td>${r.farmer ? r.farmer.district : 'Nashik'}</td>
+      <td style="font-weight: 700;">${r.total_onions}</td>
+      <td>
+        <span style="color: #16a34a; font-weight: 600;">${r.grade_a.count} A</span> •
+        <span style="color: #d97706; font-weight: 600;">${r.urs.count} URS</span> •
+        <span style="color: #dc2626; font-weight: 600;">${r.rejected.count} Rej</span>
+      </td>
+      <td>
+        <span class="badge ${r.overall_result.includes('Grade A') ? 'badge-grade-a' : r.overall_result.includes('URS') ? 'badge-grade-urs' : 'badge-grade-rej'}">
+          ${r.overall_result}
+        </span>
+      </td>
+      <td>₹${r.price_estimation ? r.price_estimation.estimated_price_per_quintal || 0 : 0}/Q</td>
+      <td style="display: flex; gap: 0.35rem; align-items: center;">
+        <button onclick="viewReportDetail(${idx})" class="btn btn-sm btn-outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">
+          Inspect
+        </button>
+        <a href="/reports/download/Onion_Report_${r.report_id}.pdf" target="_blank" class="btn btn-sm btn-primary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">
+          PDF
+        </a>
+      </td>
+    </tr>
+  `).join("");
+}
+
+function viewReportDetail(idx) {
+  const r = reportsCache[idx];
+  if (!r) return;
+
+  document.getElementById("modalRepId").textContent = `Report: ${r.report_id || 'ONR-' + r.id}`;
+  const badge = document.getElementById("modalRepBadge");
+  badge.textContent = r.overall_result;
+  badge.className = `badge ${r.overall_result.includes('Grade A') ? 'badge-grade-a' : 'badge-grade-urs'}`;
+  document.getElementById("modalRepMeta").textContent = `Evaluated on ${r.evaluation_date} by ${r.officer ? r.officer.name : 'Officer'} at ${r.officer ? r.officer.procurement_center : ''}`;
+
+  // Image
+  const imgUrl = r.annotated_image_path ? `/outputs/${r.annotated_image_path.split(/[\\/]/).pop()}` : '';
+  document.getElementById("modalAnnotatedImg").src = imgUrl;
+
+  document.getElementById("modalQualitySummary").textContent = r.quality_summary || "Quality summary generated automatically by OnionGrade AI.";
+  document.getElementById("modalCountHealthy").textContent = r.healthy.count;
+  document.getElementById("modalCountDamaged").textContent = r.damaged.count;
+  document.getElementById("modalCountRotten").textContent = r.rotten.count;
+  document.getElementById("modalCountSprouted").textContent = r.sprouted.count;
+
+  document.getElementById("modalDownloadPdfBtn").href = `/reports/download/Onion_Report_${r.report_id}.pdf`;
+
+  document.getElementById("reportDetailModal").style.display = "flex";
+}
+
+function closeReportModal() {
+  document.getElementById("reportDetailModal").style.display = "none";
+}
+</script>
+{% endblock %}

@@ -1,12 +1,15 @@
-import os
 from flask import (
-    Blueprint, render_template, redirect, url_for, session, send_from_directory, abort, flash
+    Blueprint,
+    flash,
+    redirect,
+    render_template,
+    send_from_directory,
+    session,
+    url_for,
 )
-from backend.models.user import User
-from backend.models.farmer import FarmerProfile
-from backend.models.officer import OfficerProfile
+
 from backend.models.evaluation import Evaluation
-from backend.utils.auth_helpers import login_required, role_required, get_current_user
+from backend.utils.auth_helpers import get_current_user, login_required, role_required
 from config import Config
 
 views_bp = Blueprint("views", __name__)
@@ -19,6 +22,8 @@ def home():
             return redirect(url_for("views.farmer_dashboard"))
         elif role == "officer":
             return redirect(url_for("views.officer_dashboard"))
+        elif role in ("government", "admin"):
+            return redirect(url_for("views.government_dashboard"))
     return render_template("index.html")
 
 # Auth views
@@ -39,6 +44,13 @@ def login_officer():
     if "user_id" in session and session.get("user_role") == "officer":
         return redirect(url_for("views.officer_dashboard"))
     return render_template("auth/login_officer.html")
+
+@views_bp.route("/login/government")
+@views_bp.route("/login/admin")
+def login_government():
+    if "user_id" in session and session.get("user_role") in ("government", "admin"):
+        return redirect(url_for("views.government_dashboard"))
+    return render_template("auth/login_government.html")
 
 @views_bp.route("/logout")
 def logout_view():
@@ -159,6 +171,65 @@ def officer_market():
 def officer_profile():
     user = get_current_user()
     return render_template("officer/profile.html", user=user, officer=user.officer_profile)
+
+# =========================================================
+# Government Portal Views
+# =========================================================
+@views_bp.route("/government/dashboard")
+@login_required
+@role_required("government", "admin")
+def government_dashboard():
+    user = get_current_user()
+    return render_template("government/dashboard.html", user=user)
+
+@views_bp.route("/government/farmers")
+@login_required
+@role_required("government", "admin")
+def government_farmers():
+    user = get_current_user()
+    return render_template("government/farmers.html", user=user)
+
+@views_bp.route("/government/officers")
+@login_required
+@role_required("government", "admin")
+def government_officers():
+    user = get_current_user()
+    return render_template("government/officers.html", user=user)
+
+@views_bp.route("/government/transactions")
+@login_required
+@role_required("government", "admin")
+def government_transactions():
+    user = get_current_user()
+    return render_template("government/transactions.html", user=user)
+
+@views_bp.route("/government/reports")
+@login_required
+@role_required("government", "admin")
+def government_reports():
+    user = get_current_user()
+    return render_template("government/reports.html", user=user)
+
+@views_bp.route("/government/audit-logs")
+@login_required
+@role_required("government", "admin")
+def government_audit_logs():
+    user = get_current_user()
+    return render_template("government/audit_logs.html", user=user)
+
+@views_bp.route("/government/analytics")
+@login_required
+@role_required("government", "admin")
+def government_analytics():
+    user = get_current_user()
+    return render_template("government/analytics.html", user=user)
+
+@views_bp.route("/government/search")
+@login_required
+@role_required("government", "admin")
+def government_search():
+    user = get_current_user()
+    return render_template("government/search.html", user=user)
 
 # Media file serving
 @views_bp.route("/outputs/<path:filename>")

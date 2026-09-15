@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block title %}Field Officers Directory - Government Portal{% endblock %}
+{% block page_title %}Procurement Officers & Mandi Operations Directory{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h1 style="font-size: 1.65rem; color: #0b2545;">Field Officers & Mandi Yards</h1>
+    <p style="color: var(--text-muted); font-size: 0.9rem;">
+      Authorized procurement officials, active APMC grading terminals, inspection throughput, and performance logs.
+    </p>
+  </div>
+  <div>
+    <button onclick="fetchOfficers()" class="btn btn-sm btn-outline">
+      🔄 Refresh
+    </button>
+  </div>
+</div>
+
+<!-- Search Bar -->
+<div class="card" style="margin-bottom: 1.5rem; padding: 1.25rem;">
+  <div style="display: flex; gap: 1rem;">
+    <div style="flex: 1;">
+      <input type="text" id="officerSearchInput" class="form-control" placeholder="Search by Officer ID (OFF-...), Name, Procurement Center, or Mandi Location...">
+    </div>
+    <button onclick="fetchOfficers()" class="btn btn-primary">
+      Search Officers
+    </button>
+  </div>
+</div>
+
+<!-- Officers Table Card -->
+<div class="card">
+  <div class="card-header">
+    <h3>Designated Procurement Officials (<span id="officersCount">0</span>)</h3>
+  </div>
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Officer ID</th>
+          <th>Officer Name</th>
+          <th>Contact Mobile</th>
+          <th>Email</th>
+          <th>Procurement Center Yard</th>
+          <th>Location</th>
+          <th>Evaluations</th>
+          <th>Reports Issued</th>
+          <th>Last Active</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="officersTableBody">
+        <tr><td colspan="10" style="text-align: center; padding: 2rem;">Loading officer directory...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Officer Detail Modal -->
+<div id="officerDetailModal" style="display: none; position: fixed; inset: 0; z-index: 100; background: rgba(0, 0, 0, 0.5); align-items: center; justify-content: center; padding: 1.5rem;">
+  <div style="background: #ffffff; border-radius: var(--radius-lg); max-width: 800px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 2rem; box-shadow: var(--shadow-xl); position: relative;">
+    <button onclick="closeOfficerModal()" style="position: absolute; top: 1.25rem; right: 1.25rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b;">
+      ✕
+    </button>
+    
+    <div style="margin-bottom: 1.5rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 1rem;">
+      <h2 id="modalOfficerName" style="color: #0b2545;">Officer Profile</h2>
+      <p id="modalOfficerMeta" style="color: #64748b; font-size: 0.9rem;"></p>
+    </div>
+
+    <h4 style="margin-bottom: 0.75rem; color: #0b2545;">Assigned Yard Evaluations</h4>
+    <div class="table-responsive">
+      <table class="data-table" style="font-size: 0.85rem;">
+        <thead>
+          <tr>
+            <th>Report ID</th>
+            <th>Date</th>
+            <th>Farmer</th>
+            <th>Onions</th>
+            <th>Grade A</th>
+            <th>URS</th>
+            <th>Rejected</th>
+            <th>Result</th>
+            <th>PDF</th>
+          </tr>
+        </thead>
+        <tbody id="modalOfficerEvalsBody">
+          <tr><td colspan="9" style="text-align: center;">No evaluations recorded.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const searchParam = urlParams.get("search");
+  if (searchParam) {
+    document.getElementById("officerSearchInput").value = searchParam;
+  }
+  fetchOfficers();
+});
+
+async function fetchOfficers() {
+  const q = document.getElementById("officerSearchInput").value.trim();
+  const params = new URLSearchParams();
+  if (q) params.append("search", q);
+
+  try {
+    const res = await fetch(`/api/government/officers?${params.toString()}`);
+    const data = await res.json();
+    if (!data.success) {
+      showToast(data.error || "Failed to load officers.", "error");
+      return;
+    }
+
+    document.getElementById("officersCount").textContent = data.count;
+    renderOfficersTable(data.officers);
+  } catch (err) {
+    console.error("Officer fetch error:", err);
+    showToast("Network error loading officers.", "error");
+  }
+}
+
+function renderOfficersTable(officers) {
+  const tbody = document.getElementById("officersTableBody");
+  if (!officers || officers.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; padding: 2.5rem; color: #64748b;">No matching officers found.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = officers.map(o => `
+    <tr>
+      <td><span class="badge" style="background: #fef3c7; color: #92400e; font-family: monospace; font-weight: 700;">${o.officer_id}</span></td>
+      <td><b>${o.name}</b></td>
+      <td>${o.phone || 'N/A'}</td>
+      <td style="font-size: 0.85rem; color: #64748b;">${o.email || 'N/A'}</td>
+      <td><b>${o.procurement_center}</b></td>
+      <td>${o.location}</td>
+      <td style="font-weight: 700; color: #0b2545;">${o.total_evaluations}</td>
+      <td><span class="badge badge-success">${o.reports_generated}</span></td>
+      <td style="font-size: 0.82rem; color: #64748b;">${o.last_active}</td>
+      <td>
+        <button onclick="viewOfficerDetails(${o.id})" class="btn btn-sm btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;">
+          Yard Evals
+        </button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+async function viewOfficerDetails(officerId) {
+  try {
+    const res = await fetch(`/api/government/officers/${officerId}`);
+    const data = await res.json();
+    if (!data.success) {
+      showToast(data.error || "Failed to load officer details.", "error");
+      return;
+    }
+
+    const o = data.officer;
+    document.getElementById("modalOfficerName").textContent = `Officer ${o.name} (${o.officer_id})`;
+    document.getElementById("modalOfficerMeta").textContent = `Yard: ${o.procurement_center} • Location: ${o.location} • Mobile: ${o.phone || 'N/A'}`;
+
+    const tbody = document.getElementById("modalOfficerEvalsBody");
+    if (!data.evaluations || data.evaluations.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 1.5rem; color: #64748b;">No evaluations recorded for this officer.</td></tr>`;
+    } else {
+      tbody.innerHTML = data.evaluations.map(e => `
+        <tr>
+          <td><b>${e.report_id || 'ONR-' + e.id}</b></td>
+          <td>${e.evaluation_date}</td>
+          <td>${e.farmer ? e.farmer.name : 'Farmer'}</td>
+          <td>${e.total_onions}</td>
+          <td style="color: #16a34a; font-weight: 600;">${e.grade_a.count}</td>
+          <td style="color: #d97706; font-weight: 600;">${e.urs.count}</td>
+          <td style="color: #dc2626; font-weight: 600;">${e.rejected.count}</td>
+          <td><span class="badge ${e.overall_result.includes('Grade A') ? 'badge-grade-a' : 'badge-grade-urs'}">${e.overall_result}</span></td>
+          <td><a href="/reports/download/Onion_Report_${e.report_id}.pdf" target="_blank" class="btn btn-sm btn-outline" style="padding: 0.15rem 0.4rem; font-size: 0.75rem;">PDF</a></td>
+        </tr>
+      `).join("");
+    }
+
+    document.getElementById("officerDetailModal").style.display = "flex";
+  } catch (err) {
+    showToast("Error loading details.", "error");
+  }
+}
+
+function closeOfficerModal() {
+  document.getElementById("officerDetailModal").style.display = "none";
+}
+</script>
+{% endblock %}
