@@ -626,7 +626,7 @@ The project can be further optimized and tested for production-scale deployment.
 
 **OnionGrade AI | AI-Based Onion Quality Assessment & Digital Grading System | SIH26031**
 
-[▶️ Watch the OnionGrade AI Demonstration](YOUR_YOUTUBE_VIDEO_LINK)
+[▶️ Watch the OnionGrade AI Demonstration]([YOUR_YOUTUBE_VIDEO_LINK](https://youtu.be/3Ji59fw6_HE?feature=shared))
 
 ---
 
