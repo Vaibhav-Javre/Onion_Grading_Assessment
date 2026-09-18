@@ -61,8 +61,7 @@
 24. [Future Scope](#future-scope)
 25. [Project Status](#project-status)
 26. [Demo](#project-demo)
-27. [Screenshots](#screenshots)
-28. [Team](#team)
+27. [Team](#team)
 
 ---
 
@@ -627,6 +626,7 @@ The project can be further optimized and tested for production-scale deployment.
 **OnionGrade AI | AI-Based Onion Quality Assessment & Digital Grading System | SIH26031**
 
 [▶️ Watch the OnionGrade AI Demonstration]([YOUR_YOUTUBE_VIDEO_LINK](https://youtu.be/3Ji59fw6_HE?feature=shared))
+https://youtu.be/3Ji59fw6_HE?feature=shared
 
 ---
 
