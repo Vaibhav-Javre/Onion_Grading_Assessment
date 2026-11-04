@@ -1,10 +1,20 @@
+import os
+from datetime import datetime, timezone
 from flask import Blueprint, jsonify, redirect, request, session
+from werkzeug.utils import secure_filename
 
 from backend.database.db import db
 from backend.models.farmer import FarmerProfile
 from backend.models.officer import OfficerProfile
 from backend.models.user import User
-from backend.utils.auth_helpers import generate_farmer_id, get_current_user
+from backend.utils.audit_helpers import record_audit_log
+from backend.utils.auth_helpers import (
+    generate_application_id,
+    generate_farmer_id,
+    generate_officer_id,
+    get_current_user,
+)
+from config import Config
 
 auth_bp = Blueprint("auth_bp", __name__, url_prefix="/api/auth")
 
@@ -81,6 +91,139 @@ def register_farmer():
         return jsonify({"success": False, "error": f"Registration failed: {e!s}"}), 500
 
 
+@auth_bp.route("/register/officer", methods=["POST"])
+def register_officer():
+    """
+    Registers a new Procurement Officer application with Pending Government Verification status.
+    Account remains inactive until Government/Admin approves.
+    """
+    if request.is_json:
+        data = request.get_json() or {}
+        id_proof_file = None
+    else:
+        data = request.form.to_dict()
+        id_proof_file = request.files.get("id_proof")
+
+    name = data.get("name", "").strip()
+    phone = data.get("phone", "").strip()
+    email = data.get("email", "").strip() or None
+    password = data.get("password", "")
+    confirm_password = data.get("confirm_password", "")
+    government_id_number = data.get("government_id_number", "").strip()
+    procurement_center = data.get("procurement_center", "").strip()
+    center_address = data.get("center_address", "").strip()
+    village = data.get("village", "").strip()
+    taluka = data.get("taluka", "").strip()
+    district = data.get("district", "").strip()
+    state = data.get("state", "Maharashtra").strip()
+    designation = data.get("designation", "").strip() or "Procurement Officer"
+    department = data.get("department", "").strip() or "APMC Mandi Board"
+    experience_years = data.get("experience_years", "").strip()
+
+    # Validation
+    if not name:
+        return jsonify({"success": False, "error": "Officer full name is required."}), 400
+    if not phone or len(phone) < 10:
+        return jsonify({"success": False, "error": "Valid 10-digit mobile number is required."}), 400
+    if not email:
+        return jsonify({"success": False, "error": "Official email address is required."}), 400
+    if not password or len(password) < 6:
+        return jsonify({"success": False, "error": "Password must be at least 6 characters."}), 400
+    if password != confirm_password:
+        return jsonify({"success": False, "error": "Passwords do not match."}), 400
+    if not government_id_number:
+        return jsonify({"success": False, "error": "Government / Official ID number is required."}), 400
+    if not procurement_center:
+        return jsonify({"success": False, "error": "Procurement Center Name is required."}), 400
+    if not district:
+        return jsonify({"success": False, "error": "District is required."}), 400
+
+    # Duplicate checks
+    if User.query.filter_by(phone=phone).first():
+        return jsonify({"success": False, "error": "An account with this mobile number already exists."}), 400
+    if User.query.filter_by(email=email).first():
+        return jsonify({"success": False, "error": "An account with this email already exists."}), 400
+    if OfficerProfile.query.filter_by(government_id_number=government_id_number).first():
+        return jsonify({"success": False, "error": "A Procurement Officer with this Government/Official ID number is already registered."}), 400
+
+    # File upload handling
+    id_proof_rel_path = None
+    if id_proof_file and id_proof_file.filename:
+        filename = secure_filename(id_proof_file.filename)
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        allowed_docs = {"pdf", "png", "jpg", "jpeg", "webp"}
+        if ext not in allowed_docs:
+            return jsonify({"success": False, "error": f"Invalid document file type (.{ext}). Allowed formats: PDF, JPG, PNG, WEBP."}), 400
+
+        doc_dir = os.path.join(Config.UPLOAD_FOLDER, "officer_docs")
+        os.makedirs(doc_dir, exist_ok=True)
+        unique_name = f"id_proof_{int(datetime.now(timezone.utc).timestamp())}_{filename}"
+        doc_full_path = os.path.join(doc_dir, unique_name)
+        id_proof_file.save(doc_full_path)
+        id_proof_rel_path = f"officer_docs/{unique_name}"
+
+    try:
+        user = User(
+            name=name,
+            phone=phone,
+            email=email,
+            role="officer"
+        )
+        user.set_password(password)
+        db.session.add(user)
+        db.session.flush()
+
+        application_id = generate_application_id()
+        location_str = f"{village}, {district}" if village else district
+
+        officer_profile = OfficerProfile(
+            user_id=user.id,
+            officer_id=application_id,  # SQLite NOT NULL constraint satisfied; assigned official OFF-2026-00X on approval
+            application_id=application_id,
+            status="PENDING",
+            is_active=False,
+            government_id_number=government_id_number,
+            id_proof_path=id_proof_rel_path,
+            procurement_center=procurement_center,
+            center_address=center_address,
+            location=location_str,
+            village=village,
+            taluka=taluka,
+            district=district,
+            state=state,
+            designation=designation,
+            department=department,
+            experience_years=experience_years
+        )
+        db.session.add(officer_profile)
+        db.session.commit()
+
+        record_audit_log(
+            action="OFFICER_REGISTRATION_SUBMITTED",
+            entity_type="officer",
+            entity_id=application_id,
+            details={
+                "name": name,
+                "email": email,
+                "phone": phone,
+                "procurement_center": procurement_center,
+                "government_id_number": government_id_number,
+                "status": "PENDING"
+            }
+        )
+
+        return jsonify({
+            "success": True,
+            "status": "PENDING",
+            "application_id": application_id,
+            "message": "Registration submitted successfully. Your account is pending Government verification. You will be able to login only after your registration is approved."
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": f"Officer registration failed: {e!s}"}), 500
+
+
 @auth_bp.route("/login", methods=["POST"])
 def login():
     data = request.get_json() or {}
@@ -104,9 +247,11 @@ def login():
             ).filter_by(role="farmer").first()
 
     elif expected_role == "officer":
-        # Identifier can be officer_id, phone, or email
-        if identifier.startswith("OFF-"):
-            op = OfficerProfile.query.filter_by(officer_id=identifier).first()
+        # Identifier can be officer_id, application_id, phone, or email
+        if identifier.startswith("OFF-") or identifier.startswith("APP-"):
+            op = OfficerProfile.query.filter(
+                (OfficerProfile.officer_id == identifier) | (OfficerProfile.application_id == identifier)
+            ).first()
             if op:
                 user = op.user
         else:
@@ -122,13 +267,40 @@ def login():
     if not user or not user.check_password(password) or (user.role != expected_role and not (expected_role in ("government", "admin") and user.role in ("government", "admin"))):
         return jsonify({"success": False, "error": "Invalid credentials or unauthorized role."}), 401
 
+    # Strict approval verification for Procurement Officers
+    if user.role == "officer":
+        officer = user.officer_profile
+        if not officer:
+            return jsonify({"success": False, "error": "Officer profile record not found."}), 403
+
+        if officer.status == "PENDING":
+            return jsonify({
+                "success": False,
+                "status": "PENDING",
+                "application_id": officer.application_id or officer.officer_id,
+                "error": "Your registration is still pending Government verification."
+            }), 403
+
+        if officer.status == "REJECTED":
+            return jsonify({
+                "success": False,
+                "status": "REJECTED",
+                "application_id": officer.application_id or officer.officer_id,
+                "rejection_reason": officer.rejection_reason or "Registration criteria not met.",
+                "error": "Your Procurement Officer registration was rejected. Please contact the Government/Admin authority."
+            }), 403
+
+        if officer.status != "APPROVED" or not officer.is_active:
+            return jsonify({
+                "success": False,
+                "error": "Your account is not approved by Government."
+            }), 403
+
     # Login successful -> setup session
     session.clear()
     session["user_id"] = user.id
     session["user_name"] = user.name
     session["user_role"] = user.role
-
-    from backend.utils.audit_helpers import record_audit_log
 
     redirect_url = "/farmer/dashboard"
     if user.role == "farmer" and user.farmer_profile:
@@ -139,6 +311,13 @@ def login():
         session["profile_id"] = user.officer_profile.id
         session["officer_id"] = user.officer_profile.officer_id
         redirect_url = "/officer/dashboard"
+        record_audit_log(
+            action="OFFICER_LOGIN",
+            entity_type="auth",
+            entity_id=user.officer_profile.officer_id,
+            details={"name": user.name, "procurement_center": user.officer_profile.procurement_center},
+            user=user
+        )
     elif user.role in ("government", "admin"):
         redirect_url = "/government/dashboard"
         record_audit_log(

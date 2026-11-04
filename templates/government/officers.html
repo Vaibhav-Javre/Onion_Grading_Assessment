@@ -11,7 +11,10 @@
       Authorized procurement officials, active APMC grading terminals, inspection throughput, and performance logs.
     </p>
   </div>
-  <div>
+  <div style="display: flex; gap: 0.5rem;">
+    <a href="{{ url_for('views.government_officer_verification') }}" class="btn btn-sm btn-primary" style="background: #0284c7; border-color: #0284c7; font-weight: 600;">
+      🛡️ Officer Verification Queue
+    </a>
     <button onclick="fetchOfficers()" class="btn btn-sm btn-outline">
       🔄 Refresh
     </button>

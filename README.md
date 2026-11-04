@@ -1,7 +1,7 @@
 # OnionGrade AI
 
 ### AI-Powered Onion Quality Assessment & Digital Procurement System
-**Smart India Hackathon (SIH) Project**
+**AI-Powered AgriTech Innovation Project**
 
 ---
 
@@ -70,7 +70,7 @@ oniongrade_ai/
 │       └── seed_data.py            # Demo seed data (farmers, officer, reports)
 │
 ├── models/
-│   ├── best.pt                     # YOLO11 onion detector model
+│   ├── Yolo26.pt                   # YOLO26n onion detector model
 │   └── final_onion_quality_model.keras # Keras 4-class quality classifier
 │
 ├── static/
@@ -102,8 +102,8 @@ oniongrade_ai/
 
 ### Pipeline Stages
 1. **Input**: High-resolution batch photograph of onions (JPG, JPEG, PNG, WEBP).
-2. **YOLO11 Detection** (`backend/ai/detector.py`):
-   - Model: `models/best.pt`
+2. **YOLO26n Detection** (`backend/ai/detector.py`):
+   - Model: `models/Yolo26.pt`
    - Detects all visible onion bulbs with bounding box coordinates `[x1, y1, x2, y2]` and confidence score.
 3. **Cropping**:
    - Each detected bulb is extracted into an individual sub-image.
@@ -164,7 +164,7 @@ Adjust configurations as needed (or use default development values).
 
 ### 5. Verify Model Files
 Ensure models exist in the `models/` directory:
-- `models/best.pt` (YOLO11 detector)
+- `models/Yolo26.pt` (YOLO26n detector)
 - `models/final_onion_quality_model.keras` (Keras classifier)
 
 ### 6. Run the Application
@@ -188,7 +188,7 @@ The system automatically seeds demo accounts on first launch:
 | **Farmer 2** | `9823012345` (or `FMR-2026-0002`) | `farmer123` | Suresh Deshmukh (Vinchur, Yeola) |
 | **Officer** | `OFF-2026-001` (or `vikram.shinde@apmc.gov.in`) | `officer123` | Vikram Shinde (Lasalgaon APMC Yard) |
 
-*Convenient "Fill Demo Credentials" buttons are provided on both login pages for rapid hackathon presentation.*
+*Convenient "Fill Demo Credentials" buttons are provided on both login pages for rapid demonstration and presentation.*
 
 ---
 

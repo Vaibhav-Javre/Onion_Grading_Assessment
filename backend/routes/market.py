@@ -27,9 +27,10 @@ def get_lasalgaon_reference():
 def get_prices():
     district = request.args.get("district", "").strip()
     market_name = request.args.get("market", "").strip()
+    search = request.args.get("search", "").strip() or request.args.get("q", "").strip() or market_name
 
     try:
-        prices = MarketPriceService.get_market_prices(district=district, market_name=market_name)
+        prices = MarketPriceService.get_market_prices(district=district, market_name=market_name, search=search)
         return jsonify({
             "success": True,
             "total": len(prices),

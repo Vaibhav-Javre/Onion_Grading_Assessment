@@ -1,180 +1,312 @@
 {% extends "base.html" %}
 
-{% block title %}Farmer Directory - OnionGrade AI{% endblock %}
-{% block page_title %}Registered Farmer Directory{% endblock %}
+{% block title %}Manage Farmers - OnionGrade AI{% endblock %}
+{% block page_title %}Manage Farmers{% endblock %}
 
 {% block content %}
-<div class="card">
-  <div class="card-header" style="flex-wrap: wrap; gap: 1rem;">
+<!-- Search Central Farmer Registry Card -->
+<div class="card" style="margin-bottom: 1.5rem; border-top: 4px solid var(--primary-green);">
+  <div class="card-header" style="flex-wrap: wrap; gap: 0.75rem;">
     <div>
-      <h3>Procurement Center Registered Farmers</h3>
-      <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.2rem;">
-        View profiles, farmer IDs, contact info, and past assessment histories
+      <h3 style="margin: 0; color: var(--primary-dark); font-size: 1.25rem;">🔍 Search Farmer Registry</h3>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem; margin-bottom: 0;">
+        Search existing registered farmers by <strong>Farmer ID</strong> or <strong>Mobile Number</strong> to add them to your procurement list.
+      </p>
+    </div>
+  </div>
+
+  <div class="card-body">
+    <form id="searchRegistryForm" onsubmit="searchCentralRegistry(event)" style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end;">
+      <div style="flex: 1; min-width: 280px;">
+        <label class="form-label" for="registrySearchInput" style="font-weight: 700;">Enter Farmer ID or Mobile Number *</label>
+        <input type="text" id="registrySearchInput" class="form-control" placeholder="e.g. FMR-2026-0001 or 9876543210" required autocomplete="off">
+      </div>
+      <div>
+        <button type="submit" id="registrySearchBtn" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.65rem 1.25rem;">
+          <span>🔍</span> Search Farmer
+        </button>
+      </div>
+      <div>
+        <button type="button" class="btn btn-secondary" onclick="clearRegistrySearch()" style="padding: 0.65rem 1rem;">
+          Clear
+        </button>
+      </div>
+    </form>
+
+    <!-- Search Result / Alert Display Box -->
+    <div id="registrySearchResultArea" style="margin-top: 1.25rem; display: none;">
+      <!-- Populated dynamically via JS -->
+    </div>
+  </div>
+</div>
+
+<!-- Officer's "My Farmers" List Table Card -->
+<div class="card">
+  <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <div style="display: flex; align-items: center; gap: 0.6rem;">
+        <h3 style="margin: 0; color: var(--primary-dark);">My Farmers</h3>
+        <span id="myFarmersCountBadge" class="badge badge-info" style="font-size: 0.85rem;">0 Farmers</span>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem; margin-bottom: 0;">
+        Farmers linked to your procurement center. Only farmers in this list can be selected for batch quality evaluation.
       </p>
     </div>
 
-    <div style="display: flex; gap: 0.75rem;">
-      <input type="text" id="farmerDirectorySearch" class="form-control" placeholder="Search by name, ID, phone..." style="width: 250px; font-size: 0.85rem;">
-      <button type="button" onclick="loadFarmerDirectory()" class="btn btn-sm btn-secondary">Search</button>
-      <button type="button" onclick="openAddFarmerModal()" class="btn btn-sm btn-primary">+ Register New Farmer</button>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <input type="text" id="myFarmersFilterInput" class="form-control" placeholder="Filter my farmers..." style="width: 230px; font-size: 0.85rem;" onkeyup="filterMyFarmersTable()">
+      <button type="button" class="btn btn-sm btn-secondary" onclick="loadMyFarmersList()">↻ Refresh</button>
     </div>
   </div>
 
   <div class="card-body" style="padding: 0;">
     <div class="table-responsive">
-      <table class="data-table">
+      <table class="data-table" id="myFarmersTable">
         <thead>
           <tr>
             <th>Farmer ID</th>
             <th>Name</th>
             <th>Mobile Number</th>
             <th>Email</th>
-            <th>Village</th>
-            <th>Taluka</th>
-            <th>District</th>
-            <th>State</th>
-            <th>Registered Date</th>
-            <th>Actions</th>
+            <th>Location</th>
+            <th>Added to My List</th>
+            <th style="text-align: right;">Actions</th>
           </tr>
         </thead>
-        <tbody id="farmerDirectoryBody">
-          <tr><td colspan="10" style="text-align: center; padding: 2rem;">Loading farmers...</td></tr>
+        <tbody id="myFarmersTableBody">
+          <tr><td colspan="7" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">Loading your farmers list...</td></tr>
         </tbody>
       </table>
     </div>
-  </div>
-</div>
-
-<!-- Modal for Registering New Farmer -->
-<div id="addFarmerModal" class="ai-progress-modal">
-  <div class="ai-progress-card" style="max-width: 520px; text-align: left;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
-      <h3 style="font-size: 1.3rem; color: var(--primary-dark); margin: 0;">Register New Farmer</h3>
-      <button type="button" onclick="closeAddFarmerModal()" style="background: none; border: none; font-size: 1.25rem; cursor: pointer;">✕</button>
-    </div>
-
-    <form id="officerAddFarmerForm">
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label" for="dirFarmerName">Full Name *</label>
-          <input type="text" id="dirFarmerName" class="form-control" placeholder="e.g. Sunil Jadhav" required>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="dirFarmerPhone">Mobile Number *</label>
-          <input type="tel" id="dirFarmerPhone" class="form-control" placeholder="10-digit mobile" pattern="[0-9]{10}" required>
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label" for="dirFarmerVillage">Village *</label>
-          <input type="text" id="dirFarmerVillage" class="form-control" placeholder="e.g. Lasalgaon" required>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="dirFarmerTaluka">Taluka *</label>
-          <input type="text" id="dirFarmerTaluka" class="form-control" placeholder="e.g. Niphad" required>
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label" for="dirFarmerDistrict">District *</label>
-          <input type="text" id="dirFarmerDistrict" class="form-control" value="Nashik" required>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="dirFarmerState">State *</label>
-          <input type="text" id="dirFarmerState" class="form-control" value="Maharashtra" required>
-        </div>
-      </div>
-
-      <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1rem;">
-        <button type="button" onclick="closeAddFarmerModal()" class="btn btn-secondary">Cancel</button>
-        <button type="submit" class="btn btn-primary">Create Farmer Record</button>
-      </div>
-    </form>
   </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-async function loadFarmerDirectory() {
-  const query = document.getElementById("farmerDirectorySearch").value.trim();
-  const tbody = document.getElementById("farmerDirectoryBody");
+let myFarmersCache = [];
+
+async function loadMyFarmersList() {
+  const tbody = document.getElementById("myFarmersTableBody");
+  const countBadge = document.getElementById("myFarmersCountBadge");
 
   try {
-    const res = await fetch(`/api/officer/farmers?query=${encodeURIComponent(query)}`);
+    const res = await fetch("/api/officer/farmers");
     const data = await res.json();
 
-    if (!data.success || !data.farmers || data.farmers.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">No farmer records found.</td></tr>`;
+    if (!data.success) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #ef4444; padding: 2rem;">Error: ${data.error || 'Failed to load farmers.'}</td></tr>`;
       return;
     }
 
-    tbody.innerHTML = data.farmers.map(f => `
-      <tr>
-        <td><span class="badge badge-info">${f.farmer_id}</span></td>
-        <td><b>${f.name}</b></td>
-        <td>${f.phone}</td>
-        <td>${f.email || '—'}</td>
-        <td>${f.village}</td>
-        <td>${f.taluka}</td>
-        <td>${f.district}</td>
-        <td>${f.state}</td>
-        <td>${f.created_at ? f.created_at.split("T")[0] : '—'}</td>
-        <td>
-          <a href="/officer/evaluate" class="btn btn-sm btn-outline">New Batch</a>
-        </td>
-      </tr>
-    `).join("");
-  } catch(e) {
-    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #ef4444; padding: 2rem;">Error loading directory.</td></tr>`;
+    myFarmersCache = data.farmers || [];
+    countBadge.textContent = `${myFarmersCache.length} Farmer${myFarmersCache.length === 1 ? '' : 's'}`;
+    renderMyFarmersTable(myFarmersCache);
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #ef4444; padding: 2rem;">Network error loading your farmers list.</td></tr>`;
   }
 }
 
-function openAddFarmerModal() {
-  document.getElementById("addFarmerModal").style.display = "flex";
+function renderMyFarmersTable(farmers) {
+  const tbody = document.getElementById("myFarmersTableBody");
+  if (!tbody) return;
+
+  if (farmers.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align: center; padding: 3rem 1.5rem; color: var(--text-muted);">
+          <div style="font-size: 2rem; margin-bottom: 0.5rem;">🧑‍🌾</div>
+          <p style="font-weight: 700; color: var(--text-dark); margin-bottom: 0.25rem;">No farmers in your list yet.</p>
+          <span style="font-size: 0.85rem;">Use the search box above with a <strong>Farmer ID</strong> or <strong>Mobile Number</strong> to find and add registered farmers.</span>
+        </td>
+      </tr>`;
+    return;
+  }
+
+  tbody.innerHTML = farmers.map(f => `
+    <tr>
+      <td><span class="badge badge-info" style="font-family: monospace; font-size: 0.85rem; font-weight: 700;">${f.farmer_id}</span></td>
+      <td><b>${f.name}</b></td>
+      <td>${f.phone || '—'}</td>
+      <td>${f.email || '—'}</td>
+      <td>${f.village ? `${f.village}, ${f.taluka}, ${f.district}` : '—'}</td>
+      <td style="font-size: 0.85rem; color: var(--text-muted);">${f.added_to_officer_at || '—'}</td>
+      <td style="text-align: right; white-space: nowrap;">
+        <a href="/officer/evaluate?farmer_id=${encodeURIComponent(f.farmer_id)}" class="btn btn-sm btn-primary" style="margin-right: 0.4rem; padding: 0.35rem 0.75rem;">
+          📷 New Evaluation
+        </a>
+        <button type="button" class="btn btn-sm btn-outline" style="color: #ef4444; border-color: #fca5a5; padding: 0.35rem 0.75rem;" onclick="removeFarmerFromMyList(${f.id}, '${f.name.replace(/'/g, "\\'")}', '${f.farmer_id}')">
+          Remove
+        </button>
+      </td>
+    </tr>
+  `).join("");
 }
-function closeAddFarmerModal() {
-  document.getElementById("addFarmerModal").style.display = "none";
+
+function filterMyFarmersTable() {
+  const q = document.getElementById("myFarmersFilterInput").value.trim().toLowerCase();
+  if (!q) {
+    renderMyFarmersTable(myFarmersCache);
+    return;
+  }
+  const filtered = myFarmersCache.filter(f =>
+    (f.name && f.name.toLowerCase().includes(q)) ||
+    (f.farmer_id && f.farmer_id.toLowerCase().includes(q)) ||
+    (f.phone && f.phone.includes(q)) ||
+    (f.village && f.village.toLowerCase().includes(q)) ||
+    (f.district && f.district.toLowerCase().includes(q))
+  );
+  renderMyFarmersTable(filtered);
+}
+
+async function searchCentralRegistry(event) {
+  if (event) event.preventDefault();
+  const input = document.getElementById("registrySearchInput");
+  const query = input.value.trim();
+  const resultArea = document.getElementById("registrySearchResultArea");
+  const btn = document.getElementById("registrySearchBtn");
+
+  if (!query) return;
+
+  btn.disabled = true;
+  btn.textContent = "Searching...";
+  resultArea.style.display = "block";
+  resultArea.innerHTML = `<div style="padding: 1.25rem; text-align: center; color: var(--text-muted);">Searching central Farmer Registry...</div>`;
+
+  try {
+    const res = await fetch(`/api/officer/farmers/search?query=${encodeURIComponent(query)}`);
+    const data = await res.json();
+
+    if (res.ok && data.success && data.farmer) {
+      const f = data.farmer;
+      const isInList = Boolean(data.is_in_my_list);
+
+      resultArea.innerHTML = `
+        <div style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: var(--radius-md); padding: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.4rem;">
+                <h4 style="color: var(--primary-green); font-size: 1.2rem; margin: 0; font-weight: 800;">${f.name}</h4>
+                <span class="badge badge-info" style="font-family: monospace; font-size: 0.9rem; font-weight: 700;">${f.farmer_id}</span>
+                <span class="badge badge-success">✓ Verified in Central Registry</span>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.35rem 1.5rem; font-size: 0.88rem; color: var(--text-dark); margin-top: 0.5rem;">
+                <div><b>📞 Mobile:</b> ${f.phone || "—"}</div>
+                <div><b>✉️ Email:</b> ${f.email || "—"}</div>
+                <div><b>📍 Village:</b> ${f.village || "—"}</div>
+                <div><b>Taluka:</b> ${f.taluka || "—"}</div>
+                <div><b>District:</b> ${f.district || "—"}</div>
+                <div><b>State:</b> ${f.state || "Maharashtra"}</div>
+              </div>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              ${isInList ? `
+                <span class="badge badge-success" style="padding: 0.5rem 0.9rem; font-size: 0.85rem; font-weight: 700;">
+                  ✓ Already in My Farmers
+                </span>
+                <a href="/officer/evaluate?farmer_id=${encodeURIComponent(f.farmer_id)}" class="btn btn-sm btn-primary">
+                  Evaluate Now →
+                </a>
+              ` : `
+                <button type="button" class="btn btn-primary" onclick="addFarmerToMyList('${f.farmer_id}', '${f.name.replace(/'/g, "\\'")}')" style="box-shadow: 0 2px 8px rgba(15, 81, 50, 0.25);">
+                  + Add to My Farmers
+                </button>
+              `}
+            </div>
+          </div>
+        </div>
+      `;
+    } else {
+      // Farmer not found in central registry
+      resultArea.innerHTML = `
+        <div style="background: #fef2f2; border: 1.5px solid #fca5a5; border-radius: var(--radius-md); padding: 1.25rem; color: #991b1b;">
+          <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+            <span style="font-size: 1.6rem; line-height: 1;">⚠️</span>
+            <div>
+              <div style="font-weight: 800; font-size: 1rem; color: #b91c1c; margin-bottom: 0.25rem;">
+                Farmer not found. Please ask the farmer to register through the Farmer Portal.
+              </div>
+              <p style="margin: 0; font-size: 0.875rem; color: #7f1d1d; line-height: 1.5;">
+                No registered farmer record matches "<strong>${query}</strong>" in the central registry.
+                Farmer registration must be completed by the farmer via the <strong>Farmer Portal</strong>.
+                Once registered, the farmer will receive a unique Farmer ID that can be searched and added here.
+              </p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+  } catch (err) {
+    resultArea.innerHTML = `
+      <div style="background: #fef2f2; border: 1px solid #fca5a5; border-radius: var(--radius-md); padding: 1rem; color: #991b1b;">
+        Network error while searching registry. Please try again.
+      </div>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<span>🔍</span> Search Farmer`;
+  }
+}
+
+async function addFarmerToMyList(farmerId, farmerName) {
+  try {
+    const res = await fetch("/api/officer/farmers/add", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ farmer_id: farmerId })
+    });
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+      showToast(data.message || `Farmer ${farmerName} added to your list!`, "success");
+      // Re-run search to update result display to "Already in My Farmers"
+      searchCentralRegistry();
+      // Refresh My Farmers table
+      loadMyFarmersList();
+    } else {
+      showToast(data.error || "Failed to add farmer.", "error");
+    }
+  } catch (err) {
+    showToast("Network error: " + err.message, "error");
+  }
+}
+
+async function removeFarmerFromMyList(farmerProfileId, farmerName, farmerId) {
+  const confirmed = confirm(`Are you sure you want to remove "${farmerName}" (${farmerId}) from your farmers list?\n\nNote: This will ONLY remove the farmer from your personal list. Their central Farmer Registry account and evaluation history will NOT be deleted.`);
+  if (!confirmed) return;
+
+  try {
+    const res = await fetch("/api/officer/farmers/remove", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ farmer_profile_id: farmerProfileId })
+    });
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+      showToast(data.message || `Farmer ${farmerName} removed from your list.`, "info");
+      loadMyFarmersList();
+      // If result box is currently showing this farmer, refresh it
+      const currentQuery = document.getElementById("registrySearchInput").value.trim();
+      if (currentQuery) {
+        searchCentralRegistry();
+      }
+    } else {
+      showToast(data.error || "Failed to remove farmer.", "error");
+    }
+  } catch (err) {
+    showToast("Network error: " + err.message, "error");
+  }
+}
+
+function clearRegistrySearch() {
+  document.getElementById("registrySearchInput").value = "";
+  document.getElementById("registrySearchResultArea").style.display = "none";
+  document.getElementById("registrySearchResultArea").innerHTML = "";
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  loadFarmerDirectory();
-  document.getElementById("farmerDirectorySearch").addEventListener("keyup", (e) => {
-    if (e.key === "Enter") loadFarmerDirectory();
-  });
-
-  document.getElementById("officerAddFarmerForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const payload = {
-      name: document.getElementById("dirFarmerName").value.trim(),
-      phone: document.getElementById("dirFarmerPhone").value.trim(),
-      village: document.getElementById("dirFarmerVillage").value.trim(),
-      taluka: document.getElementById("dirFarmerTaluka").value.trim(),
-      district: document.getElementById("dirFarmerDistrict").value.trim(),
-      state: document.getElementById("dirFarmerState").value.trim()
-    };
-
-    try {
-      const res = await fetch("/api/officer/farmers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast(data.message, "success");
-        closeAddFarmerModal();
-        document.getElementById("officerAddFarmerForm").reset();
-        loadFarmerDirectory();
-      } else {
-        showToast(data.error || "Failed to add farmer", "error");
-      }
-    } catch(err) {
-      showToast("Network error: " + err.message, "error");
-    }
-  });
+  loadMyFarmersList();
 });
 </script>
 {% endblock %}

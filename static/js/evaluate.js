@@ -7,6 +7,12 @@ let currentEvaluationData = null;
 let donutChart = null;
 let barChart = null;
 
+// Human Review & AI Confidence State
+const CONFIDENCE_THRESHOLD = 0.50; // 50% Threshold per specification
+let activeDetectionFilter = "all";  // "all" | "low" | "high"
+let detectionSortOrder = "conf_asc"; // "conf_asc" (Low to High - default) | "conf_desc" | "onion_asc" | "onion_desc"
+let humanReviewState = {};          // onion_number -> { ...item, original_class, current_class, is_confirmed, is_overridden }
+
 // Government Mandi Price Estimation Engine State
 let currentPriceData = {
   mandi_name: "Lasalgaon APMC Mandi",
@@ -29,12 +35,11 @@ let currentPriceData = {
 document.addEventListener("DOMContentLoaded", () => {
   initFarmerSearch();
   initDragAndDrop();
-  initAddFarmerModal();
   initCameraCapture();
   initEvaluationActions();
 });
 
-// Step 1: Farmer Search & Selection
+// Step 1: Farmer Search & Selection (Only within Officer's My Farmers list)
 function initFarmerSearch() {
   const searchInput = document.getElementById("farmerSearchInput");
   const resultsContainer = document.getElementById("farmerSearchResults");
@@ -54,8 +59,30 @@ function initFarmerSearch() {
     }, 250);
   });
 
-  // Load initial list
-  loadRecentFarmers();
+  // Check URL query parameters for pre-selected farmer_id
+  const urlParams = new URLSearchParams(window.location.search);
+  const preselectId = urlParams.get("farmer_id");
+  if (preselectId) {
+    autoPreselectFarmer(preselectId);
+  } else {
+    // Load initial list of officer's farmers
+    loadRecentFarmers();
+  }
+}
+
+async function autoPreselectFarmer(farmerId) {
+  try {
+    const res = await fetch(`/api/officer/farmer-lookup/${encodeURIComponent(farmerId)}`);
+    const data = await res.json();
+    if (res.ok && data.success && data.farmer) {
+      selectFarmer(data.farmer);
+      showToast(`Selected farmer: ${data.farmer.name} (${data.farmer.farmer_id})`, "success");
+    } else {
+      loadRecentFarmers();
+    }
+  } catch (err) {
+    loadRecentFarmers();
+  }
 }
 
 async function fetchFarmers(query = "") {
@@ -81,11 +108,13 @@ function renderFarmerList(farmers) {
 
   if (farmers.length === 0) {
     container.innerHTML = `
-      <div style="padding: 1rem; text-align: center; color: var(--text-muted);">
-        No farmers found matching query. 
-        <button type="button" class="btn btn-sm btn-primary" onclick="openAddFarmerModal()" style="margin-top: 0.5rem;">
-          + Add New Farmer
-        </button>
+      <div style="padding: 1.5rem 1rem; text-align: center; color: #b91c1c; background: #fef2f2; border-radius: var(--radius-sm); border: 1px dashed #fca5a5;">
+        <div style="font-weight: 800; font-size: 0.95rem; margin-bottom: 0.35rem;">
+          Farmer not found. Please ask the farmer to register through the Farmer Portal.
+        </div>
+        <p style="margin: 0; font-size: 0.82rem; color: #7f1d1d;">
+          You can only select farmers from your <strong>My Farmers</strong> list. If the farmer is registered centrally, add them via <strong><a href="/officer/farmers" style="color: #991b1b; text-decoration: underline;">Manage Farmers</a></strong>.
+        </p>
       </div>`;
     return;
   }
@@ -111,15 +140,24 @@ function selectFarmer(farmer) {
   if (card && details && hiddenInput) {
     hiddenInput.value = farmer.farmer_id;
     details.innerHTML = `
-      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-        <div>
-          <h4 style="color: var(--primary-green); font-size: 1.1rem; margin-bottom: 0.25rem;">${farmer.name}</h4>
-          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.25rem;">
-            <b>ID:</b> <span class="badge badge-info">${farmer.farmer_id}</span> • <b>Mobile:</b> ${farmer.phone}
-          </p>
-          <p style="font-size: 0.85rem; color: var(--text-dark);">
-            <b>Location:</b> ${farmer.village}, Taluka: ${farmer.taluka}, District: ${farmer.district}, State: ${farmer.state}
-          </p>
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+        <div style="flex: 1; min-width: 280px;">
+          <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.4rem;">
+            <h4 style="color: var(--primary-green); font-size: 1.15rem; margin: 0; font-weight: 800;">${farmer.name}</h4>
+            <span class="badge badge-info" style="font-family: monospace; font-weight: 700; font-size: 0.85rem;">${farmer.farmer_id}</span>
+            <span class="badge badge-success" style="font-size: 0.75rem;">✓ Registered Farmer</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.4rem 1.25rem; font-size: 0.85rem; color: var(--text-dark); margin-top: 0.4rem;">
+            <div><b>📞 Mobile:</b> ${farmer.phone || "N/A"}</div>
+            ${farmer.email ? `<div><b>✉️ Email:</b> ${farmer.email}</div>` : ""}
+            <div><b>📍 Village:</b> ${farmer.village || "--"}</div>
+            <div><b>Taluka:</b> ${farmer.taluka || "--"}</div>
+            <div><b>District:</b> ${farmer.district || "--"}</div>
+            <div><b>State:</b> ${farmer.state || "Maharashtra"}</div>
+          </div>
+          <div style="margin-top: 0.6rem; font-size: 0.78rem; color: #166534; background: rgba(34, 197, 94, 0.12); padding: 0.3rem 0.65rem; border-radius: 4px; display: inline-block;">
+            ✓ Farmer profile loaded from registry. Ready for onion image evaluation & procurement batch.
+          </div>
         </div>
         <button type="button" class="btn btn-sm btn-secondary" onclick="clearSelectedFarmer()">Change Farmer</button>
       </div>
@@ -213,6 +251,7 @@ function handleFilesSelection(fileList) {
   });
 
   if (addedCount > 0) {
+    dismissQualityAlert();
     showToast(`Added ${addedCount} photo(s). Total: ${uploadedFiles.length}`, "success");
     renderUploadedGallery();
   }
@@ -369,7 +408,21 @@ async function startEvaluation() {
 
     if (!response.ok || !data.success) {
       modal.style.display = "none";
-      showToast(data.error || "AI evaluation could not be completed. Please try again.", "error");
+      const errCode = data.code || "";
+      const errMsg = data.error || "AI evaluation could not be completed. Please try again.";
+
+      if (errCode === "IMAGE_TOO_BLURRY") {
+        showQualityAlert("⚠️ Image Too Blurry Alert", "Image is too blurry. Please upload a clear image for accurate evaluation.");
+        showToast("⚠️ Image is too blurry. Please upload a clear image for accurate evaluation.", "error");
+      } else if (errCode === "NO_ONIONS_DETECTED") {
+        showQualityAlert("🔍 No Onions Detected", "No onions were detected in the uploaded photo. Please upload an image with clearly visible onions.");
+        showToast("🔍 No Onions Detected. Please upload an image containing onions.", "error");
+      } else if (errCode === "IMAGE_TOO_DARK" || errCode === "IMAGE_OVEREXPOSED") {
+        showQualityAlert("💡 Lighting Condition Issue", errMsg);
+        showToast("💡 " + errMsg, "error");
+      } else {
+        showToast(errMsg, "error");
+      }
       return;
     }
 
@@ -402,6 +455,16 @@ function displayAIResults(data) {
   // Update indicators
   document.getElementById("step2Indicator").classList.add("completed");
   document.getElementById("step3Indicator").classList.add("active");
+
+  // Overlapping Onions Advisory Banner
+  const advisoryBanner = document.getElementById("resOverlappingAdvisoryBanner");
+  if (advisoryBanner) {
+    if (res.is_overlapping || res.advisory_notes) {
+      advisoryBanner.style.display = "block";
+    } else {
+      advisoryBanner.style.display = "none";
+    }
+  }
 
   // Multi-Image Header Badge
   const totalImgs = res.total_images || 1;
@@ -462,30 +525,9 @@ function displayAIResults(data) {
     res.grades["Rejected"].count
   );
 
-  // Detections Table
-  const tbody = document.getElementById("detectionsTableBody");
-  const countBadge = document.getElementById("tableDetectionsCountBadge");
-  if (countBadge) countBadge.textContent = `${res.detections.length} Detected Bulbs`;
-
-  tbody.innerHTML = res.detections.map(d => {
-    let badgeClass = "badge-grade-a";
-    if (d.class_name === "Damaged") badgeClass = "badge-grade-urs";
-    else if (d.class_name === "Rotten" || d.class_name === "Sprouted") badgeClass = "badge-grade-rej";
-    else if (d.class_name === "Uncertain") badgeClass = "badge-info";
-
-    return `
-      <tr>
-        <td><b>#${d.onion_number}</b></td>
-        <td><span class="badge badge-info" style="font-size: 0.75rem;">Angle #${d.image_order || 1}</span></td>
-        <td><span class="badge ${badgeClass}">${d.class_name}</span></td>
-        <td>${Math.round(d.classification_confidence * 100)}%</td>
-        <td>${Math.round(d.detection_confidence * 100)}%</td>
-        <td style="font-family: monospace; font-size: 0.75rem; color: var(--text-muted);">
-          [${d.bounding_box.join(", ")}]
-        </td>
-      </tr>
-    `;
-  }).join("");
+  // Initialize and Render Human Review Table with AI Confidence & Override controls
+  initHumanReviewState(res.detections || []);
+  renderHumanReviewTable();
 }
 
 function setupMultiAngleTabs(res) {
@@ -541,6 +583,29 @@ function setupMultiAngleTabs(res) {
   }
 }
 
+// Language Selection State
+let selectedReportLanguage = "en";
+
+function onReportLanguageChange(lang) {
+  selectedReportLanguage = lang || "en";
+  ["en", "hi", "mr"].forEach(l => {
+    const card = document.getElementById("langCard" + l.charAt(0).toUpperCase() + l.slice(1));
+    if (card) {
+      if (l === selectedReportLanguage) {
+        card.style.borderColor = "#10b981";
+        card.style.background = "#f0fdf4";
+        const titleEl = card.querySelector("div > div:first-child");
+        if (titleEl) titleEl.style.color = "#065f46";
+      } else {
+        card.style.borderColor = "#cbd5e1";
+        card.style.background = "#ffffff";
+        const titleEl = card.querySelector("div > div:first-child");
+        if (titleEl) titleEl.style.color = "#1e293b";
+      }
+    }
+  });
+}
+
 // Step 5: Officer Confirms Evaluation
 async function confirmAndSubmitReport() {
   if (!currentEvaluationId) {
@@ -553,6 +618,9 @@ async function confirmAndSubmitReport() {
   confirmBtn.innerHTML = `<span>Generating Official ReportLab PDF...</span>`;
 
   try {
+    const langRadio = document.querySelector('input[name="reportLanguage"]:checked');
+    const chosenLang = langRadio ? langRadio.value : (selectedReportLanguage || "en");
+
     const payload = {
       quantity_quintals: currentPriceData.quantity_quintals || 0,
       mandi_modal_price: currentPriceData.modal_price,
@@ -562,7 +630,9 @@ async function confirmAndSubmitReport() {
       mandi_name: currentPriceData.mandi_name,
       mandi_price_date: currentPriceData.price_date,
       mandi_api_source: currentPriceData.source,
-      urs_multiplier: currentPriceData.urs_multiplier !== undefined ? currentPriceData.urs_multiplier : 0.8
+      urs_multiplier: currentPriceData.urs_multiplier !== undefined ? currentPriceData.urs_multiplier : 0.8,
+      language: chosenLang,
+      item_overrides: getItemOverridesList()
     };
 
     const res = await fetch(`/api/officer/evaluate/${currentEvaluationId}/confirm`, {
@@ -579,10 +649,21 @@ async function confirmAndSubmitReport() {
       return;
     }
 
-    // Success! Show confirmation modal
+    // Success! Show confirmation modal with language information
     document.getElementById("confirmedReportId").textContent = data.report_id;
+    const finalLang = data.language || chosenLang;
+    const langLabels = {
+      en: "🇬🇧 English",
+      hi: "🇮🇳 हिंदी (Hindi)",
+      mr: "🚩 मराठी (Marathi)"
+    };
+    const langBadgeEl = document.getElementById("confirmedReportLangBadge");
+    if (langBadgeEl) langBadgeEl.textContent = langLabels[finalLang] || finalLang.toUpperCase();
+    const langNameEl = document.getElementById("confirmedReportLangName");
+    if (langNameEl) langNameEl.textContent = langLabels[finalLang] || finalLang;
+
     const filename = `Onion_Report_${data.report_id}.pdf`;
-    const downloadUrl = `/reports/download/${filename}`;
+    const downloadUrl = `/reports/download/${filename}?lang=${encodeURIComponent(finalLang)}`;
 
     const downloadBtn = document.getElementById("pdfDownloadLink");
     if (downloadBtn) {
@@ -594,7 +675,7 @@ async function confirmAndSubmitReport() {
     
     const viewBtn = document.getElementById("pdfViewLink");
     if (viewBtn) {
-      viewBtn.href = `${downloadUrl}?inline=1`;
+      viewBtn.href = `${downloadUrl}&inline=1`;
       viewBtn.target = "_blank";
       viewBtn.onclick = null;
     }
@@ -848,50 +929,111 @@ function resetModalPriceToLive() {
   }
 }
 
-// Modal for quick adding new farmer
+// =========================================================
+// FARMER ID LOOKUP & AUTO-POPULATION
+// =========================================================
+let lookedUpFarmerData = null;
 
-function initAddFarmerModal() {
-  const modal = document.getElementById("addFarmerModal");
+function openFarmerIdLookupModal() {
+  const modal = document.getElementById("lookupFarmerModal");
   if (!modal) return;
+  modal.style.display = "flex";
+  document.getElementById("lookupFarmerIdInput").value = "";
+  document.getElementById("lookupFarmerAlert").style.display = "none";
+  document.getElementById("lookupFarmerPreview").style.display = "none";
+  document.getElementById("confirmSelectFarmerBtn").style.display = "none";
+  lookedUpFarmerData = null;
+  setTimeout(() => {
+    document.getElementById("lookupFarmerIdInput").focus();
+  }, 100);
+}
 
-  const form = document.getElementById("addFarmerForm");
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const payload = {
-      name: document.getElementById("newFarmerName").value,
-      phone: document.getElementById("newFarmerPhone").value,
-      village: document.getElementById("newFarmerVillage").value,
-      taluka: document.getElementById("newFarmerTaluka").value,
-      district: document.getElementById("newFarmerDistrict").value,
-      state: document.getElementById("newFarmerState").value
-    };
+function closeFarmerIdLookupModal() {
+  const modal = document.getElementById("lookupFarmerModal");
+  if (modal) modal.style.display = "none";
+  lookedUpFarmerData = null;
+}
 
-    try {
-      const res = await fetch("/api/officer/farmers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (data.success && data.farmer) {
-        showToast(data.message, "success");
-        closeAddFarmerModal();
-        selectFarmer(data.farmer);
-      } else {
-        showToast(data.error || "Failed to add farmer", "error");
-      }
-    } catch (err) {
-      showToast("Network error: " + err.message, "error");
+function handleLookupKey(event) {
+  if (event.key === "Enter") {
+    executeFarmerLookup();
+  }
+}
+
+async function executeFarmerLookup() {
+  const idInput = document.getElementById("lookupFarmerIdInput");
+  const alertBox = document.getElementById("lookupFarmerAlert");
+  const previewBox = document.getElementById("lookupFarmerPreview");
+  const confirmBtn = document.getElementById("confirmSelectFarmerBtn");
+  const fetchBtn = document.getElementById("lookupFarmerBtn");
+
+  const query = idInput.value.trim();
+  if (!query) {
+    alertBox.textContent = "Please enter a Farmer ID (e.g. FMR-2026-0001).";
+    alertBox.style.background = "#fee2e2";
+    alertBox.style.color = "#b91c1c";
+    alertBox.style.display = "block";
+    return;
+  }
+
+  alertBox.style.display = "none";
+  fetchBtn.disabled = true;
+  fetchBtn.textContent = "Fetching...";
+
+  try {
+    const res = await fetch(`/api/officer/farmer-lookup/${encodeURIComponent(query)}`);
+    const data = await res.json();
+
+    if (res.ok && data.success && data.farmer) {
+      lookedUpFarmerData = data.farmer;
+
+      // Populate Preview
+      document.getElementById("previewFarmerName").textContent = data.farmer.name || "--";
+      document.getElementById("previewFarmerId").textContent = data.farmer.farmer_id || query;
+      document.getElementById("previewFarmerPhone").textContent = data.farmer.phone || "--";
+      document.getElementById("previewFarmerEmail").textContent = data.farmer.email || "None";
+      document.getElementById("previewFarmerVillage").textContent = data.farmer.village || "--";
+      document.getElementById("previewFarmerTaluka").textContent = data.farmer.taluka || "--";
+      document.getElementById("previewFarmerDistrict").textContent = data.farmer.district || "--";
+      document.getElementById("previewFarmerState").textContent = data.farmer.state || "Maharashtra";
+
+      previewBox.style.display = "block";
+      confirmBtn.style.display = "inline-flex";
+
+      alertBox.textContent = `✓ Registered farmer record found in My Farmers: ${data.farmer.name}`;
+      alertBox.style.background = "#dcfce7";
+      alertBox.style.color = "#166534";
+      alertBox.style.display = "block";
+    } else {
+      lookedUpFarmerData = null;
+      previewBox.style.display = "none";
+      confirmBtn.style.display = "none";
+      const errMsg = (data && data.error) ? data.error : "Farmer not found. Please ask the farmer to register through the Farmer Portal.";
+      alertBox.innerHTML = `<strong>${errMsg}</strong>` +
+        (data && data.tip ? `<div style="margin-top: 0.35rem; font-size: 0.8rem; font-weight: normal;">${data.tip}</div>` : "");
+      alertBox.style.background = "#fee2e2";
+      alertBox.style.color = "#b91c1c";
+      alertBox.style.display = "block";
     }
-  });
+  } catch (err) {
+    lookedUpFarmerData = null;
+    previewBox.style.display = "none";
+    confirmBtn.style.display = "none";
+    alertBox.textContent = "Farmer not found. Please ask the farmer to register through the Farmer Portal.";
+    alertBox.style.background = "#fee2e2";
+    alertBox.style.color = "#b91c1c";
+    alertBox.style.display = "block";
+  } finally {
+    fetchBtn.disabled = false;
+    fetchBtn.textContent = "Fetch Details";
+  }
 }
 
-function openAddFarmerModal() {
-  document.getElementById("addFarmerModal").style.display = "flex";
-}
-
-function closeAddFarmerModal() {
-  document.getElementById("addFarmerModal").style.display = "none";
+function confirmFarmerLookupSelection() {
+  if (!lookedUpFarmerData) return;
+  selectFarmer(lookedUpFarmerData);
+  closeFarmerIdLookupModal();
+  showToast(`Farmer ${lookedUpFarmerData.name} (${lookedUpFarmerData.farmer_id}) selected.`, "success");
 }
 
 function initEvaluationActions() {
@@ -1076,3 +1218,403 @@ function updateCameraModalStrip(file) {
     strip.scrollLeft = strip.scrollWidth;
   }
 }
+
+// Quality Check Alert Helpers
+function showQualityAlert(title, message) {
+  const box = document.getElementById("imageQualityAlertBox");
+  const titleEl = document.getElementById("imageQualityAlertTitle");
+  const msgEl = document.getElementById("imageQualityAlertMessage");
+  if (box && titleEl && msgEl) {
+    titleEl.textContent = title;
+    msgEl.textContent = message;
+    box.style.display = "block";
+    box.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}
+
+function dismissQualityAlert() {
+  const box = document.getElementById("imageQualityAlertBox");
+  if (box) box.style.display = "none";
+}
+
+// =========================================================
+// AI CONFIDENCE & HUMAN REVIEW ENGINE
+// =========================================================
+
+function initHumanReviewState(detections) {
+  humanReviewState = {};
+  activeDetectionFilter = "all";
+  detectionSortOrder = "conf_asc"; // Default: Low confidence at top (ascending order)
+
+  detections.forEach(d => {
+    const conf = parseFloat(d.classification_confidence || 0);
+    const isHigh = conf >= CONFIDENCE_THRESHOLD;
+    humanReviewState[d.onion_number] = {
+      onion_number: d.onion_number,
+      image_order: d.image_order || 1,
+      ai_class: d.class_name,
+      current_class: d.class_name,
+      classification_confidence: conf,
+      detection_confidence: parseFloat(d.detection_confidence || 0),
+      bounding_box: d.bounding_box || [0, 0, 0, 0],
+      is_high_confidence: isHigh,
+      is_confirmed: isHigh, // High-confidence is verified by default; low-confidence awaits officer confirmation
+      is_overridden: false
+    };
+  });
+}
+
+function setDetectionSort(sortOrder) {
+  detectionSortOrder = sortOrder;
+  renderHumanReviewTable();
+}
+
+function toggleConfidenceSort() {
+  detectionSortOrder = (detectionSortOrder === "conf_asc") ? "conf_desc" : "conf_asc";
+  renderHumanReviewTable();
+}
+
+function toggleOnionSort() {
+  detectionSortOrder = (detectionSortOrder === "onion_asc") ? "onion_desc" : "onion_asc";
+  renderHumanReviewTable();
+}
+
+function setDetectionFilter(filterType) {
+  activeDetectionFilter = filterType;
+
+  // Update tab button styles
+  const tabAll = document.getElementById("filterTabAll");
+  const tabLow = document.getElementById("filterTabLow");
+  const tabHigh = document.getElementById("filterTabHigh");
+
+  if (tabAll) {
+    tabAll.className = filterType === "all" ? "btn btn-sm btn-primary" : "btn btn-sm btn-outline";
+  }
+  if (tabLow) {
+    tabLow.className = filterType === "low" ? "btn btn-sm btn-primary" : "btn btn-sm btn-outline";
+    if (filterType !== "low") tabLow.style.borderColor = "#f59e0b";
+  }
+  if (tabHigh) {
+    tabHigh.className = filterType === "high" ? "btn btn-sm btn-primary" : "btn btn-sm btn-outline";
+    if (filterType !== "high") tabHigh.style.borderColor = "#10b981";
+  }
+
+  renderHumanReviewTable();
+}
+
+function renderHumanReviewTable() {
+  const tbody = document.getElementById("detectionsTableBody");
+  if (!tbody) return;
+
+  const items = Object.values(humanReviewState);
+  const totalCount = items.length;
+  const lowConfItems = items.filter(it => !it.is_high_confidence);
+  const lowCount = lowConfItems.length;
+  const highCount = totalCount - lowCount;
+  const unconfirmedLowCount = lowConfItems.filter(it => !it.is_confirmed && !it.is_overridden).length;
+
+  // Update counter badges
+  const cntAll = document.getElementById("cntAllBulbs");
+  const cntLow = document.getElementById("cntLowConf");
+  const cntHigh = document.getElementById("cntHighConf");
+  const countBadge = document.getElementById("tableDetectionsCountBadge");
+  const statusSummary = document.getElementById("humanReviewSummaryStatus");
+
+  if (cntAll) cntAll.textContent = totalCount;
+  if (cntLow) cntLow.textContent = lowCount;
+  if (cntHigh) cntHigh.textContent = highCount;
+  if (countBadge) countBadge.textContent = `${totalCount} Detected Bulbs`;
+
+  if (statusSummary) {
+    if (unconfirmedLowCount > 0) {
+      statusSummary.innerHTML = `
+        <span style="display: inline-flex; align-items: center; gap: 0.3rem; background: #fffbeb; border: 1px solid #fde68a; padding: 0.2rem 0.6rem; border-radius: 4px; color: #b45309;">
+          ⚠️ <b>${unconfirmedLowCount}</b> low-confidence bulb${unconfirmedLowCount > 1 ? "s" : ""} pending officer confirmation
+        </span>`;
+    } else if (lowCount > 0) {
+      statusSummary.innerHTML = `
+        <span style="display: inline-flex; align-items: center; gap: 0.3rem; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 0.2rem 0.6rem; border-radius: 4px; color: #065f46;">
+          ✓ All ${lowCount} low-confidence bulbs reviewed & confirmed by Officer
+        </span>`;
+    } else {
+      statusSummary.innerHTML = `
+        <span style="display: inline-flex; align-items: center; gap: 0.3rem; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 0.2rem 0.6rem; border-radius: 4px; color: #065f46;">
+          ✓ All bulbs meet High Confidence threshold (≥ 50%)
+        </span>`;
+    }
+  }
+
+  // Filter items based on active tab
+  let displayItems = [...items];
+  if (activeDetectionFilter === "low") {
+    displayItems = displayItems.filter(it => !it.is_high_confidence);
+  } else if (activeDetectionFilter === "high") {
+    displayItems = displayItems.filter(it => it.is_high_confidence);
+  }
+
+  // Sort displayItems (Default: Confidence Ascending, so low confidence images show at top)
+  displayItems.sort((a, b) => {
+    if (detectionSortOrder === "conf_asc") {
+      const diff = (a.classification_confidence ?? 0) - (b.classification_confidence ?? 0);
+      if (diff !== 0) return diff;
+      return (a.onion_number ?? 0) - (b.onion_number ?? 0);
+    } else if (detectionSortOrder === "conf_desc") {
+      const diff = (b.classification_confidence ?? 0) - (a.classification_confidence ?? 0);
+      if (diff !== 0) return diff;
+      return (a.onion_number ?? 0) - (b.onion_number ?? 0);
+    } else if (detectionSortOrder === "onion_desc") {
+      return (b.onion_number ?? 0) - (a.onion_number ?? 0);
+    } else {
+      // onion_asc
+      return (a.onion_number ?? 0) - (b.onion_number ?? 0);
+    }
+  });
+
+  // Sync sort controls & indicators
+  const sortSelect = document.getElementById("detectionSortSelect");
+  if (sortSelect && sortSelect.value !== detectionSortOrder) {
+    sortSelect.value = detectionSortOrder;
+  }
+  const confIcon = document.getElementById("confSortIcon");
+  if (confIcon) {
+    if (detectionSortOrder === "conf_asc") {
+      confIcon.textContent = "▲ (Low 1st)";
+      confIcon.style.color = "#d97706";
+    } else if (detectionSortOrder === "conf_desc") {
+      confIcon.textContent = "▼ (High 1st)";
+      confIcon.style.color = "#047857";
+    } else {
+      confIcon.textContent = "↕";
+      confIcon.style.color = "var(--text-muted)";
+    }
+  }
+  const onionIcon = document.getElementById("onionSortIcon");
+  if (onionIcon) {
+    if (detectionSortOrder === "onion_asc") {
+      onionIcon.textContent = "▲";
+      onionIcon.style.color = "var(--primary-dark)";
+    } else if (detectionSortOrder === "onion_desc") {
+      onionIcon.textContent = "▼";
+      onionIcon.style.color = "var(--primary-dark)";
+    } else {
+      onionIcon.textContent = "";
+    }
+  }
+
+  if (displayItems.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+          No onions match the selected filter (${activeDetectionFilter}).
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = displayItems.map(d => {
+    const confPct = Math.round(d.classification_confidence * 100);
+    const isHigh = d.is_high_confidence;
+
+    // AI Prediction badge
+    let aiBadgeClass = "badge-grade-a";
+    if (d.ai_class === "Damaged") aiBadgeClass = "badge-grade-urs";
+    else if (d.ai_class === "Rotten" || d.ai_class === "Sprouted") aiBadgeClass = "badge-grade-rej";
+    else if (d.ai_class === "Uncertain") aiBadgeClass = "badge-info";
+
+    // AI Confidence Status Badge (High Confidence vs Low Confidence)
+    let confStatusHtml = "";
+    if (isHigh) {
+      confStatusHtml = `
+        <span class="badge" style="background: #ecfdf5; color: #065f46; border: 1.5px solid #a7f3d0; font-weight: 700; padding: 0.35rem 0.6rem; display: inline-flex; align-items: center; gap: 0.3rem;">
+          <span style="color: #10b981; font-weight: 900;">✓</span> High Confidence
+        </span>`;
+    } else {
+      confStatusHtml = `
+        <span class="badge" style="background: #fffbeb; color: #b45309; border: 1.5px solid #fde68a; font-weight: 700; padding: 0.35rem 0.6rem; display: inline-flex; align-items: center; gap: 0.3rem;" title="Confidence is below 50% threshold. Verification recommended.">
+          <span style="color: #f59e0b; font-weight: 900;">⚠</span> Low Confidence – Manual Verification Recommended
+        </span>`;
+    }
+
+    // Officer Review & Verification column
+    let reviewStatusTag = "";
+    if (d.is_overridden) {
+      reviewStatusTag = `<span class="badge" style="background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; font-size: 0.7rem;">✎ Overridden</span>`;
+    } else if (d.is_confirmed) {
+      reviewStatusTag = `<span class="badge badge-success" style="font-size: 0.7rem;">✓ Confirmed</span>`;
+    } else {
+      reviewStatusTag = `<span class="badge" style="background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; font-size: 0.7rem;">⚠ Pending Review</span>`;
+    }
+
+    // Quick Accept AI button if low confidence and not yet confirmed
+    let quickAcceptBtn = "";
+    if (!isHigh && !d.is_confirmed && !d.is_overridden) {
+      quickAcceptBtn = `
+        <button type="button" class="btn btn-sm btn-outline" onclick="confirmSinglePrediction(${d.onion_number})" style="font-size: 0.7rem; padding: 2px 7px; border-color: #f59e0b; color: #b45309;" title="Accept AI classification for this bulb">
+          ✓ Accept AI
+        </button>`;
+    }
+
+    const rowBg = (!isHigh && !d.is_confirmed && !d.is_overridden) ? "background: #fffdf5;" : "";
+
+    return `
+      <tr style="${rowBg}">
+        <td><b>#${d.onion_number}</b></td>
+        <td><span class="badge badge-info" style="font-size: 0.75rem;">Angle #${d.image_order}</span></td>
+        <td>
+          <span class="badge ${aiBadgeClass}" style="font-size: 0.8rem;">
+            ${d.ai_class}
+          </span>
+        </td>
+        <td>
+          <div style="font-weight: 800; font-size: 0.9rem; color: ${isHigh ? '#047857' : '#b45309'};">
+            ${confPct}%
+          </div>
+        </td>
+        <td>
+          ${confStatusHtml}
+        </td>
+        <td>
+          <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+            <select class="form-control" style="width: 155px; height: 30px; font-size: 0.8rem; font-weight: 700; padding: 2px 6px; border: 1.5px solid ${d.is_overridden ? '#3b82f6' : (!isHigh && !d.is_confirmed ? '#f59e0b' : '#10b981')}; background: white; border-radius: 4px;"
+                    onchange="onOfficerOverrideChange(${d.onion_number}, this.value)"
+                    title="Select confirmed grade for bulb #${d.onion_number}">
+              <option value="Healthy" ${d.current_class === "Healthy" ? "selected" : ""}>Healthy (Grade A)</option>
+              <option value="Damaged" ${d.current_class === "Damaged" ? "selected" : ""}>Damaged (URS)</option>
+              <option value="Rotten" ${d.current_class === "Rotten" ? "selected" : ""}>Rotten (Rejected)</option>
+              <option value="Sprouted" ${d.current_class === "Sprouted" ? "selected" : ""}>Sprouted (Rejected)</option>
+            </select>
+            ${reviewStatusTag}
+            ${quickAcceptBtn}
+          </div>
+        </td>
+        <td style="font-family: monospace; font-size: 0.72rem; color: var(--text-muted);">
+          [${d.bounding_box.join(", ")}]
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function onOfficerOverrideChange(onionNumber, newClass) {
+  const item = humanReviewState[onionNumber];
+  if (!item) return;
+
+  item.current_class = newClass;
+  item.is_overridden = (newClass !== item.ai_class);
+  item.is_confirmed = true;
+
+  // Re-render table and dynamically recalculate all metrics
+  renderHumanReviewTable();
+  recalculateEvaluationMetrics();
+  showToast(`Bulb #${onionNumber} updated to '${newClass}'. Batch grading recalculated.`, "info");
+}
+
+function confirmSinglePrediction(onionNumber) {
+  const item = humanReviewState[onionNumber];
+  if (!item) return;
+
+  item.is_confirmed = true;
+  renderHumanReviewTable();
+  showToast(`Bulb #${onionNumber} AI classification confirmed ✓`, "success");
+}
+
+function confirmAllPredictions() {
+  const items = Object.values(humanReviewState);
+  items.forEach(it => {
+    it.is_confirmed = true;
+  });
+  renderHumanReviewTable();
+  showToast(`✓ All ${items.length} bulb predictions verified and confirmed by Officer.`, "success");
+}
+
+function getItemOverridesList() {
+  return Object.values(humanReviewState).map(it => ({
+    onion_number: it.onion_number,
+    class_name: it.current_class
+  }));
+}
+
+function recalculateEvaluationMetrics() {
+  const items = Object.values(humanReviewState);
+  const total = items.length;
+  if (total === 0) return;
+
+  const healthyCount = items.filter(it => it.current_class === "Healthy").length;
+  const damagedCount = items.filter(it => it.current_class === "Damaged").length;
+  const rottenCount = items.filter(it => it.current_class === "Rotten").length;
+  const sproutedCount = items.filter(it => it.current_class === "Sprouted").length;
+
+  const gradeACount = healthyCount;
+  const ursCount = damagedCount;
+  const rejectedCount = rottenCount + sproutedCount;
+
+  const healthyPct = Math.round((healthyCount / total) * 100 * 10) / 10;
+  const damagedPct = Math.round((damagedCount / total) * 100 * 10) / 10;
+  const rottenPct = Math.round((rottenCount / total) * 100 * 10) / 10;
+  const sproutedPct = Math.round((sproutedCount / total) * 100 * 10) / 10;
+
+  const gradeAPct = Math.round((gradeACount / total) * 100 * 10) / 10;
+  const ursPct = Math.round((ursCount / total) * 100 * 10) / 10;
+  const rejectedPct = Math.round((rejectedCount / total) * 100 * 10) / 10;
+
+  // Update Summary Counts in UI
+  const elGradeA = document.getElementById("resGradeA");
+  const elGradeAPct = document.getElementById("resGradeAPct");
+  const elURS = document.getElementById("resURS");
+  const elURSPct = document.getElementById("resURSPct");
+  const elRejected = document.getElementById("resRejected");
+  const elRejectedPct = document.getElementById("resRejectedPct");
+
+  if (elGradeA) elGradeA.textContent = gradeACount;
+  if (elGradeAPct) elGradeAPct.textContent = gradeAPct + "%";
+  if (elURS) elURS.textContent = ursCount;
+  if (elURSPct) elURSPct.textContent = ursPct + "%";
+  if (elRejected) elRejected.textContent = rejectedCount;
+  if (elRejectedPct) elRejectedPct.textContent = rejectedPct + "%";
+
+  // Quality Breakdown
+  const elHealthy = document.getElementById("resHealthyCount");
+  const elDamaged = document.getElementById("resDamagedCount");
+  const elRotten = document.getElementById("resRottenCount");
+  const elSprouted = document.getElementById("resSproutedCount");
+
+  if (elHealthy) elHealthy.textContent = `${healthyCount} (${healthyPct}%)`;
+  if (elDamaged) elDamaged.textContent = `${damagedCount} (${damagedPct}%)`;
+  if (elRotten) elRotten.textContent = `${rottenCount} (${rottenPct}%)`;
+  if (elSprouted) elSprouted.textContent = `${sproutedCount} (${sproutedPct}%)`;
+
+  // Update Charts dynamically
+  if (donutChart) {
+    donutChart.data.datasets[0].data = [healthyCount, damagedCount, rottenCount, sproutedCount];
+    donutChart.update();
+  }
+  if (barChart) {
+    barChart.data.datasets[0].data = [gradeACount, ursCount, rejectedCount];
+    barChart.update();
+  }
+
+  // Update Price Estimation Engine state
+  currentPriceData.grade_a_pct = gradeAPct;
+  currentPriceData.urs_pct = ursPct;
+  currentPriceData.rejected_pct = rejectedPct;
+
+  // Update Consolidated Summary Text dynamically
+  const elSummary = document.getElementById("resQualitySummaryText");
+  if (elSummary) {
+    let gradeLabel = "Grade A - Premium Quality";
+    if (gradeAPct < 75 && (gradeAPct + ursPct) >= 70) {
+      gradeLabel = "URS Standard - Commercial Quality";
+    } else if (gradeAPct < 75 && (gradeAPct + ursPct) < 70) {
+      gradeLabel = "High Rejection - Substandard Batch";
+    }
+    elSummary.innerHTML = `Consolidated Officer-Verified Assessment: Batch classified as <strong>${gradeLabel}</strong>. ` +
+      `Out of ${total} evaluated onions, ${gradeACount} (${gradeAPct}%) are Grade A (Healthy), ` +
+      `${ursCount} (${ursPct}%) meet URS Standard (Damaged), and ${rejectedCount} (${rejectedPct}%) are Rejected (${rottenCount} Rotten, ${sproutedCount} Sprouted). ` +
+      `<em>(Includes manual officer confirmations/overrides)</em>`;
+  }
+
+  updatePriceCalculationUI();
+}
+
+

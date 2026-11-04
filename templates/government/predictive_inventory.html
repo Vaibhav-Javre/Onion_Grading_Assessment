@@ -1,0 +1,842 @@
+{% extends "base.html" %}
+
+{% block title %}Predictive Inventory & Stock Analytics - Government Portal{% endblock %}
+{% block page_title %}Predictive Inventory & Stock Analytics{% endblock %}
+
+{% block extra_css %}
+<style>
+  .matrix-card {
+    background: #ffffff;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-color);
+    margin-bottom: 2rem;
+    overflow: hidden;
+  }
+  .matrix-header {
+    padding: 1.15rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    background: #ffffff;
+  }
+  .matrix-header h3 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #0b2545;
+    margin: 0 0 0.25rem 0;
+  }
+  .matrix-scroll-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+  }
+  .matrix-scroll-wrapper::-webkit-scrollbar {
+    height: 8px;
+  }
+  .matrix-scroll-wrapper::-webkit-scrollbar-track {
+    background: #f8fafc;
+  }
+  .matrix-scroll-wrapper::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+  }
+  .matrix-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+  .dense-matrix-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.86rem;
+    text-align: left;
+  }
+  .dense-matrix-table th {
+    background: #f8fafc;
+    color: #475569;
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.9rem 1.1rem;
+    border-bottom: 2px solid #e2e8f0;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+  .dense-matrix-table td {
+    padding: 0.95rem 1.1rem;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+    color: #1e293b;
+  }
+  .dense-matrix-table tr:hover td {
+    background-color: #f8fafc;
+  }
+  .dense-matrix-table .col-center {
+    min-width: 230px;
+    font-weight: 700;
+    color: #0f172a;
+    white-space: nowrap;
+  }
+  .dense-matrix-table .col-district {
+    min-width: 110px;
+    color: #475569;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .dense-matrix-table .num-val {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+  .dense-matrix-table .center-val {
+    text-align: center;
+    white-space: nowrap;
+  }
+  .dense-matrix-table .unit-tag {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: #64748b;
+    margin-left: 2px;
+  }
+  .dense-matrix-table .unit-subtext {
+    display: block;
+    font-size: 0.74rem;
+    font-weight: 500;
+    color: #64748b;
+    margin-top: 2px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Top Header & Actions -->
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h1 style="font-size: 1.75rem; color: #0b2545;">Statewide Predictive Inventory & Stock Analytics</h1>
+    <p style="color: var(--text-muted); font-size: 0.95rem;">
+      Macro inventory surveillance, multi-center stock depletion forecasting, storage-life risk modeling, and decision support.
+    </p>
+  </div>
+  <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+    <button onclick="openSettingsModal()" class="btn btn-sm btn-outline" style="border-color: #cbd5e1;">
+      ⚙️ Configure Thresholds
+    </button>
+    <button onclick="fetchGovPredictiveAnalytics()" class="btn btn-sm btn-primary">
+      🔄 Refresh Intelligence
+    </button>
+  </div>
+</div>
+
+<!-- AI Transparency Notice -->
+<div style="background: #eff6ff; border-left: 4px solid #1d4ed8; padding: 0.85rem 1.25rem; border-radius: var(--radius-sm); margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+  <div style="font-size: 0.88rem; color: #1e3a8a;">
+    <b>Macro Intelligence Protocol:</b> All forecasts, depletion timelines, and storage risk horizons are AI-assisted estimates calculated from verified procurement throughput. Physical stock-out timelines adapt dynamically to regional dispatch velocity.
+  </div>
+  <span class="badge" style="background: #1e3a8a; color: #ffffff; font-size: 0.75rem; padding: 0.35rem 0.75rem;">Government Decision Support</span>
+</div>
+
+<!-- 8 Macro Summary Metric Cards -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem; margin-bottom: 1.75rem;">
+  
+  <!-- Total Inventory -->
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Total Onion Inventory</span>
+      <span id="kpiGovTotalStock" class="stat-value" style="color: #0b2545;">-- kg</span>
+      <span id="kpiGovTotalStockSub" class="stat-sub">Across all registered centers</span>
+    </div>
+    <div class="stat-icon blue">🧅</div>
+  </div>
+
+  <!-- Grade A Inventory -->
+  <div class="stat-card grade-a">
+    <div class="stat-info">
+      <span class="stat-label">Grade A (Premium)</span>
+      <span id="kpiGovGradeA" class="stat-value" style="color: var(--grade-a);">-- kg</span>
+      <span id="kpiGovGradeAPct" class="stat-sub">70–80d planning life</span>
+    </div>
+    <div class="stat-icon green">✓</div>
+  </div>
+
+  <!-- URS Inventory -->
+  <div class="stat-card urs">
+    <div class="stat-info">
+      <span class="stat-label">URS Standard Stock</span>
+      <span id="kpiGovURS" class="stat-value" style="color: var(--grade-urs);">-- kg</span>
+      <span id="kpiGovURSPct" class="stat-sub">40–45d planning life</span>
+    </div>
+    <div class="stat-icon amber">⚠️</div>
+  </div>
+
+  <!-- Rejected Bulbs -->
+  <div class="stat-card rejected">
+    <div class="stat-info">
+      <span class="stat-label">Rejected / Defective</span>
+      <span id="kpiGovRejected" class="stat-value" style="color: var(--grade-rej);">-- kg</span>
+      <span class="stat-sub">Immediate segregation</span>
+    </div>
+    <div class="stat-icon red">✕</div>
+  </div>
+
+  <!-- 7-Day & 14-Day Demand -->
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Projected 7-Day Demand</span>
+      <span id="kpiGovDemand7d" class="stat-value" style="color: #1e40af;">-- kg</span>
+      <span id="kpiGovDemand14d" class="stat-sub">14-Day: -- kg</span>
+    </div>
+    <div class="stat-icon blue">📈</div>
+  </div>
+
+  <!-- Low Stock Centers -->
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Low-Stock Centers</span>
+      <span id="kpiGovLowStockCenters" class="stat-value" style="color: #b45309;">--</span>
+      <span class="stat-sub">≤ 14 days inventory</span>
+    </div>
+    <div class="stat-icon amber">🟡</div>
+  </div>
+
+  <!-- Critical Centers -->
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Critical Centers</span>
+      <span id="kpiGovCriticalCenters" class="stat-value" style="color: #dc2626;">--</span>
+      <span class="stat-sub">≤ 7 days inventory</span>
+    </div>
+    <div class="stat-icon red">🔴</div>
+  </div>
+
+  <!-- Storage-Life Risk Batches -->
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Storage-Life Risk Lots</span>
+      <span id="kpiGovStorageRisk" class="stat-value" style="color: #ea580c;">--</span>
+      <span class="stat-sub">Near or past planning limit</span>
+    </div>
+    <div class="stat-icon amber">⏳</div>
+  </div>
+
+</div>
+
+<!-- Statewide Strategic Recommendations Row -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+  <!-- SELL FIRST -->
+  <div class="card" style="margin-bottom: 0; border-top: 4px solid #f97316;">
+    <div class="card-header" style="background: #fff7ed;">
+      <h3 style="font-size: 1.05rem; color: #9a3412;">⚡ Statewide Liquidation Priority ("Sell First")</h3>
+      <span class="badge" style="background: #fed7aa; color: #9a3412;">Priority Allocation</span>
+    </div>
+    <div style="padding: 1.25rem;">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+        <span style="color: var(--text-muted); font-size: 0.85rem;">Target Category:</span>
+        <b id="govSellCategory" style="color: #ea580c; font-size: 1.05rem;">--</b>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px dashed var(--border-color);">
+        <span style="color: var(--text-muted); font-size: 0.85rem;">Recommended Sale Volume:</span>
+        <b id="govSellQuantity" style="font-size: 1.15rem; color: var(--text-dark);">-- kg</b>
+      </div>
+      <div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: var(--radius-sm); padding: 0.85rem;">
+        <div style="font-size: 0.78rem; font-weight: 700; color: #9a3412; margin-bottom: 0.25rem;">Strategic Rationale:</div>
+        <p id="govSellReason" style="font-size: 0.86rem; color: #c2410c; margin: 0; line-height: 1.45;">
+          Calculating statewide stock dynamics...
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- RETAIN / STORE -->
+  <div class="card" style="margin-bottom: 0; border-top: 4px solid var(--primary-light);">
+    <div class="card-header" style="background: #f0fdf4;">
+      <h3 style="font-size: 1.05rem; color: var(--primary-dark);">🔒 Strategic Buffer Retention ("Retain / Store")</h3>
+      <span class="badge badge-success">Food Security Buffer</span>
+    </div>
+    <div style="padding: 1.25rem;">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+        <span style="color: var(--text-muted); font-size: 0.85rem;">Target Category:</span>
+        <b id="govRetainCategory" style="color: var(--primary-green); font-size: 1.05rem;">--</b>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px dashed var(--border-color);">
+        <span style="color: var(--text-muted); font-size: 0.85rem;">Recommended Retention Volume:</span>
+        <b id="govRetainQuantity" style="font-size: 1.15rem; color: var(--text-dark);">-- kg</b>
+      </div>
+      <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-sm); padding: 0.85rem;">
+        <div style="font-size: 0.78rem; font-weight: 700; color: #166534; margin-bottom: 0.25rem;">Strategic Rationale:</div>
+        <p id="govRetainReason" style="font-size: 0.86rem; color: #15803d; margin: 0; line-height: 1.45;">
+          Evaluating storage durability and price volatility...
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 4 Predictive Charts Grid -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+  
+  <!-- Chart 1: Stock vs Demand -->
+  <div class="card" style="margin-bottom: 0;">
+    <div class="card-header">
+      <h3 style="font-size: 1rem;">Current Stock vs Forecasted Demand</h3>
+      <span class="badge badge-info">7d & 14d Depletion</span>
+    </div>
+    <div style="height: 280px; padding: 0.5rem;">
+      <canvas id="govStockVsDemandChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Chart 2: Category Breakdown -->
+  <div class="card" style="margin-bottom: 0;">
+    <div class="card-header">
+      <h3 style="font-size: 1rem;">Quality Category Distribution</h3>
+      <span class="badge badge-info">Stock by Grade</span>
+    </div>
+    <div style="height: 280px; padding: 0.5rem;">
+      <canvas id="govCategoryChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Chart 3: Storage-Life Distribution -->
+  <div class="card" style="margin-bottom: 0;">
+    <div class="card-header">
+      <h3 style="font-size: 1rem;">Storage-Life Planning Status Distribution</h3>
+      <span class="badge badge-warning">Aging Profile</span>
+    </div>
+    <div style="height: 280px; padding: 0.5rem;">
+      <canvas id="govStorageChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Chart 4: Mandi Market Price Trend -->
+  <div class="card" style="margin-bottom: 0;">
+    <div class="card-header">
+      <h3 style="font-size: 1rem;">APMC Mandi Price Observation Trend</h3>
+      <span class="badge badge-success">Modal Price (₹/Q)</span>
+    </div>
+    <div style="height: 280px; padding: 0.5rem;">
+      <canvas id="govMarketChart"></canvas>
+    </div>
+  </div>
+
+</div>
+
+<!-- Center-Wise Predictive Inventory Table -->
+<div class="matrix-card">
+  <div class="matrix-header">
+    <div>
+      <h3>Procurement Center Inventory & Risk Depletion Matrix</h3>
+      <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">
+        Center-by-center stock concentrations, forecasted depletion horizons, and storage warnings.
+      </p>
+    </div>
+    
+    <!-- Filter Controls -->
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+      <select id="govRiskFilter" onchange="fetchGovPredictiveAnalytics()" class="form-control" style="font-size: 0.85rem; padding: 0.4rem 0.6rem; width: 150px; font-weight: 500;">
+        <option value="All">All Risk Levels</option>
+        <option value="GREEN">🟢 Healthy</option>
+        <option value="YELLOW">🟡 Low Stock</option>
+        <option value="ORANGE">🟠 Critical</option>
+        <option value="RED">🔴 Stock-Out Risk</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="matrix-scroll-wrapper">
+    <table class="dense-matrix-table" style="min-width: 1360px;">
+      <thead>
+        <tr>
+          <th style="text-align: left; min-width: 220px;">Procurement Center</th>
+          <th style="text-align: left; min-width: 110px;">District</th>
+          <th style="text-align: right; min-width: 130px;">Total Stock</th>
+          <th style="text-align: right; min-width: 125px;">Grade A Stock</th>
+          <th style="text-align: right; min-width: 110px;">URS Stock</th>
+          <th style="text-align: right; min-width: 125px;">Rejected Stock</th>
+          <th style="text-align: right; min-width: 120px;">7-Day Demand</th>
+          <th style="text-align: right; min-width: 120px;">14-Day Demand</th>
+          <th style="text-align: center; min-width: 120px;">Days Remaining</th>
+          <th style="text-align: center; min-width: 130px;">Est. Stock-Out Date</th>
+          <th style="text-align: center; min-width: 140px;">Stock Status</th>
+          <th style="text-align: center; min-width: 130px;">Storage Warnings</th>
+        </tr>
+      </thead>
+      <tbody id="govCenterTableBody">
+        <tr>
+          <td colspan="12" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">
+            Aggregating multi-center predictive data...
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Category-Wise Quality Table -->
+<div class="matrix-card">
+  <div class="matrix-header">
+    <div>
+      <h3>Category-Wise Strategic Planning Matrix</h3>
+      <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">
+        Statewide quality aggregations, storage planning windows, and AI-assisted actions.
+      </p>
+    </div>
+    <span class="badge badge-info" style="font-size: 0.78rem; padding: 0.35rem 0.75rem;">Statewide Quality Aggregations</span>
+  </div>
+  <div class="matrix-scroll-wrapper">
+    <table class="dense-matrix-table" style="min-width: 1160px;">
+      <thead>
+        <tr>
+          <th style="text-align: left; min-width: 120px;">Category</th>
+          <th style="text-align: right; min-width: 140px;">Total Quantity</th>
+          <th style="text-align: right; min-width: 150px;">Forecasted Demand</th>
+          <th style="text-align: center; min-width: 140px;">Average Storage Age</th>
+          <th style="text-align: center; min-width: 180px;">Configured Planning Range</th>
+          <th style="text-align: center; min-width: 170px;">Remaining Planning Window</th>
+          <th style="text-align: center; min-width: 160px;">Risk Status</th>
+          <th style="text-align: left; min-width: 230px;">AI-Assisted Recommendation</th>
+        </tr>
+      </thead>
+      <tbody id="govCategoryTableBody">
+        <tr>
+          <td colspan="8" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+            Loading category data...
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal: Dynamic Configuration of Thresholds (Requirement #9) -->
+<div id="settingsModal" class="modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1050; align-items: center; justify-content: center;">
+  <div style="background: #ffffff; border-radius: var(--radius-md); max-width: 580px; width: 92%; padding: 1.75rem; box-shadow: var(--shadow-xl); position: relative; max-height: 90vh; overflow-y: auto;">
+    <h3 style="font-size: 1.25rem; margin-bottom: 0.5rem; color: #0b2545;">Configure Storage Planning & Stock Thresholds</h3>
+    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem;">
+      Adjust planning boundaries for Grade A, URS, and inventory alert horizons.
+    </p>
+
+    <div style="margin-bottom: 1.25rem;">
+      <h4 style="font-size: 0.95rem; color: var(--primary-dark); margin-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.25rem;">Grade A Storage Planning</h4>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem;">
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Min Planning Days</label>
+          <input type="number" id="cfgGradeAMin" class="form-control" value="70">
+        </div>
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Max Planning Days</label>
+          <input type="number" id="cfgGradeAMax" class="form-control" value="80">
+        </div>
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Warning Days</label>
+          <input type="number" id="cfgGradeAWarn" class="form-control" value="55">
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom: 1.25rem;">
+      <h4 style="font-size: 0.95rem; color: var(--grade-urs); margin-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.25rem;">URS Storage Planning</h4>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem;">
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Min Planning Days</label>
+          <input type="number" id="cfgURSMin" class="form-control" value="40">
+        </div>
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Max Planning Days</label>
+          <input type="number" id="cfgURSMax" class="form-control" value="45">
+        </div>
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Warning Days</label>
+          <input type="number" id="cfgURSWarn" class="form-control" value="30">
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom: 1.25rem;">
+      <h4 style="font-size: 0.95rem; color: #1e3a8a; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.25rem;">Inventory Depletion Alert Horizons</h4>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem;">
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Healthy Threshold (&gt; days)</label>
+          <input type="number" id="cfgStockHealthy" class="form-control" value="14">
+        </div>
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Critical Threshold (≤ days)</label>
+          <input type="number" id="cfgStockCritical" class="form-control" value="7">
+        </div>
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Stockout Risk (≤ days)</label>
+          <input type="number" id="cfgStockRisk" class="form-control" value="3">
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
+      <button type="button" onclick="closeSettingsModal()" class="btn btn-outline">Cancel</button>
+      <button type="button" onclick="saveSettings()" class="btn btn-primary" id="btnSaveSettings">Save Thresholds</button>
+    </div>
+  </div>
+</div>
+
+<!-- Chart.js Integration -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+let stockDemandChartInstance = null;
+let categoryChartInstance = null;
+let storageChartInstance = null;
+let marketChartInstance = null;
+
+async function fetchGovPredictiveAnalytics() {
+  const riskFilter = document.getElementById("govRiskFilter").value;
+  let url = "/api/government/predictive-inventory";
+  if (riskFilter && riskFilter !== "All") {
+    url += `?risk=${encodeURIComponent(riskFilter)}`;
+  }
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (!data.success) {
+      console.warn("Analytics fetch error:", data.error);
+      return;
+    }
+
+    renderGovKPIs(data);
+    renderGovRecommendations(data.recommendations || {});
+    renderGovCenterTable(data.center_breakdown || []);
+    renderGovCategoryTable(data.category_breakdown || []);
+    renderGovCharts(data.chart_data || {});
+
+  } catch (err) {
+    console.error("Failed to load government predictive analytics:", err);
+  }
+}
+
+function renderGovKPIs(data) {
+  const sum = data.macro_summary || {};
+  const d = data.demand_forecast || {};
+
+  document.getElementById("kpiGovTotalStock").textContent = `${Number(sum.total_stock_kg || 0).toLocaleString('en-IN')} kg`;
+  document.getElementById("kpiGovTotalStockSub").textContent = `${sum.total_stock_quintals || 0} Q (${(sum.total_stock_kg / 1000).toFixed(2)} Tonnes)`;
+
+  document.getElementById("kpiGovGradeA").textContent = `${Number(sum.grade_a_stock_kg || 0).toLocaleString('en-IN')} kg`;
+  document.getElementById("kpiGovGradeAPct").textContent = `${sum.grade_a_pct || 0}% of active volume`;
+
+  document.getElementById("kpiGovURS").textContent = `${Number(sum.urs_stock_kg || 0).toLocaleString('en-IN')} kg`;
+  document.getElementById("kpiGovURSPct").textContent = `${sum.urs_pct || 0}% of active volume`;
+
+  document.getElementById("kpiGovRejected").textContent = `${Number(sum.rejected_stock_kg || 0).toLocaleString('en-IN')} kg`;
+
+  document.getElementById("kpiGovDemand7d").textContent = `${Number(d.forecast_7d_kg || 0).toLocaleString('en-IN')} kg`;
+  document.getElementById("kpiGovDemand14d").textContent = `14-Day: ${Number(d.forecast_14d_kg || 0).toLocaleString('en-IN')} kg`;
+
+  document.getElementById("kpiGovLowStockCenters").textContent = sum.low_stock_centers_count || 0;
+  document.getElementById("kpiGovCriticalCenters").textContent = sum.critical_centers_count || 0;
+  document.getElementById("kpiGovStorageRisk").textContent = sum.storage_risk_total || 0;
+}
+
+function renderGovRecommendations(recs) {
+  const sell = recs.sell_first || {};
+  const retain = recs.retain || {};
+
+  document.getElementById("govSellCategory").textContent = sell.category || "None";
+  document.getElementById("govSellQuantity").textContent = `${Number(sell.recommended_quantity_kg || 0).toLocaleString('en-IN')} kg`;
+  document.getElementById("govSellReason").textContent = sell.reason || "Inventory levels balanced.";
+
+  document.getElementById("govRetainCategory").textContent = retain.category || "Grade A";
+  document.getElementById("govRetainQuantity").textContent = `${Number(retain.recommended_quantity_kg || 0).toLocaleString('en-IN')} kg`;
+  document.getElementById("govRetainReason").textContent = retain.reason || "Stock is within safe storage planning parameters.";
+}
+
+function renderGovCenterTable(centers) {
+  const tbody = document.getElementById("govCenterTableBody");
+  if (!centers || centers.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">No centers match the selected risk criteria.</td></tr>`;
+    return;
+  }
+
+  const badgeMap = {
+    GREEN: '<span class="badge badge-success" style="padding: 0.35rem 0.75rem;">🟢 Healthy</span>',
+    YELLOW: '<span class="badge badge-warning" style="padding: 0.35rem 0.75rem;">🟡 Low Stock</span>',
+    ORANGE: '<span class="badge" style="background: #fed7aa; color: #9a3412; padding: 0.35rem 0.75rem;">🟠 Critical</span>',
+    RED: '<span class="badge badge-grade-rej" style="padding: 0.35rem 0.75rem;">🔴 Stock-Out Risk</span>'
+  };
+
+  tbody.innerHTML = centers.map(c => {
+    return `
+      <tr>
+        <td class="col-center">
+          <div style="font-size: 0.9rem; font-weight: 700; color: #0f172a;">${c.center_name}</div>
+        </td>
+        <td class="col-district">
+          <span style="display: inline-block; padding: 0.2rem 0.55rem; background: #f1f5f9; border-radius: 4px; font-weight: 600; font-size: 0.8rem; color: #334155;">${c.district}</span>
+        </td>
+        <td class="num-val">
+          <span style="font-weight: 700; color: #0f172a; font-size: 0.95rem;">${Number(c.total_stock_kg).toLocaleString('en-IN')}&nbsp;<span class="unit-tag">kg</span></span>
+          <span class="unit-subtext">${c.total_stock_quintals}&nbsp;Q</span>
+        </td>
+        <td class="num-val">
+          <span style="color: var(--grade-a); font-weight: 700;">${Number(c.grade_a_kg).toLocaleString('en-IN')}&nbsp;<span class="unit-tag">kg</span></span>
+        </td>
+        <td class="num-val">
+          <span style="color: var(--grade-urs); font-weight: 700;">${Number(c.urs_kg).toLocaleString('en-IN')}&nbsp;<span class="unit-tag">kg</span></span>
+        </td>
+        <td class="num-val">
+          <span style="color: var(--grade-rej); font-weight: 700;">${Number(c.rejected_kg).toLocaleString('en-IN')}&nbsp;<span class="unit-tag">kg</span></span>
+        </td>
+        <td class="num-val">
+          <span style="color: #334155; font-weight: 600;">${Number(c.forecast_7d_kg).toLocaleString('en-IN')}&nbsp;<span class="unit-tag">kg</span></span>
+        </td>
+        <td class="num-val">
+          <span style="color: #334155; font-weight: 600;">${Number(c.forecast_14d_kg).toLocaleString('en-IN')}&nbsp;<span class="unit-tag">kg</span></span>
+        </td>
+        <td class="center-val">
+          <span style="display: inline-block; padding: 0.25rem 0.65rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; font-weight: 700; color: #0f172a;">${c.days_remaining}</span>
+        </td>
+        <td class="center-val">
+          <span style="font-size: 0.85rem; color: #475569; font-weight: 600; font-family: monospace;">${c.estimated_stockout_date}</span>
+        </td>
+        <td class="center-val">
+          ${badgeMap[c.stock_color] || c.stock_status}
+        </td>
+        <td class="center-val">
+          ${c.storage_risk_count > 0 
+            ? `<span style="display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.25rem 0.6rem; background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; border-radius: 6px; font-weight: 700; font-size: 0.8rem; white-space: nowrap;">⚠️ ${c.storage_risk_count}&nbsp;batches</span>`
+            : `<span style="color: #64748b; font-size: 0.85rem; font-weight: 500;">0 batches</span>`
+          }
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function renderGovCategoryTable(categories) {
+  const tbody = document.getElementById("govCategoryTableBody");
+  if (!categories || categories.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2rem; color: var(--text-muted);">No category records available.</td></tr>`;
+    return;
+  }
+
+  const badgeMap = {
+    GREEN: '<span class="badge badge-success" style="padding: 0.35rem 0.75rem;">🟢 Normal</span>',
+    YELLOW: '<span class="badge badge-warning" style="padding: 0.35rem 0.75rem;">🟡 Approaching</span>',
+    ORANGE: '<span class="badge" style="background: #fed7aa; color: #9a3412; padding: 0.35rem 0.75rem;">🟠 Near Limit</span>',
+    RED: '<span class="badge badge-grade-rej" style="padding: 0.35rem 0.75rem;">🔴 Requires Attention</span>'
+  };
+
+  const gradeColors = {
+    "Grade A": "var(--grade-a)",
+    "URS": "var(--grade-urs)",
+    "Rejected": "var(--grade-rej)"
+  };
+
+  tbody.innerHTML = categories.map(cat => {
+    const color = gradeColors[cat.category] || "#0f172a";
+    return `
+      <tr>
+        <td style="white-space: nowrap; text-align: left;">
+          <span style="display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 700; color: ${color}; font-size: 0.95rem;">
+            ${cat.category}
+          </span>
+        </td>
+        <td class="num-val">
+          <span style="color: #0f172a; font-weight: 700; font-size: 0.95rem;">${Number(cat.total_kg).toLocaleString('en-IN')}&nbsp;<span class="unit-tag">kg</span></span>
+        </td>
+        <td class="num-val">
+          <span style="color: #334155; font-weight: 600;">${Number(cat.forecast_7d_kg).toLocaleString('en-IN')}&nbsp;<span class="unit-tag">kg / 7d</span></span>
+        </td>
+        <td class="center-val">
+          <span style="font-weight: 600; color: #334155;">${cat.storage_age_avg_days}&nbsp;days</span>
+        </td>
+        <td class="center-val">
+          <span style="display: inline-block; padding: 0.25rem 0.65rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; color: #475569; font-size: 0.82rem; font-weight: 600;">
+            ${cat.planning_range}
+          </span>
+        </td>
+        <td class="center-val">
+          <span style="font-weight: 700; color: #0f172a; font-size: 0.9rem;">${cat.remaining_window}</span>
+        </td>
+        <td class="center-val">
+          ${badgeMap[cat.status_color] || cat.status_color}
+        </td>
+        <td style="text-align: left; min-width: 220px;">
+          <span style="display: inline-block; padding: 0.3rem 0.7rem; background: #f1f5f9; border-radius: 6px; font-size: 0.84rem; font-weight: 600; color: #0f172a;">
+            ${cat.recommendation}
+          </span>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function renderGovCharts(cd) {
+  // Chart 1: Stock vs Demand Bar Chart
+  const ctx1 = document.getElementById("govStockVsDemandChart");
+  if (ctx1) {
+    if (stockDemandChartInstance) stockDemandChartInstance.destroy();
+    const sd = cd.stock_vs_demand || {};
+    stockDemandChartInstance = new Chart(ctx1, {
+      type: "bar",
+      data: {
+        labels: sd.labels || ["Current Stock", "7-Day Demand", "14-Day Demand"],
+        datasets: [{
+          label: "Volume (kg)",
+          data: sd.data || [0, 0, 0],
+          backgroundColor: ["#16a34a", "#2563eb", "#d97706"],
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } }
+      }
+    });
+  }
+
+  // Chart 2: Category Distribution Doughnut
+  const ctx2 = document.getElementById("govCategoryChart");
+  if (ctx2) {
+    if (categoryChartInstance) categoryChartInstance.destroy();
+    const catData = cd.category_distribution || {};
+    categoryChartInstance = new Chart(ctx2, {
+      type: "doughnut",
+      data: {
+        labels: catData.labels || ["Grade A", "URS", "Rejected"],
+        datasets: [{
+          data: catData.data || [0, 0, 0],
+          backgroundColor: ["#16a34a", "#d97706", "#dc2626"]
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: "bottom" } }
+      }
+    });
+  }
+
+  // Chart 3: Storage-Life Profile
+  const ctx3 = document.getElementById("govStorageChart");
+  if (ctx3) {
+    if (storageChartInstance) storageChartInstance.destroy();
+    const stData = cd.storage_distribution || {};
+    storageChartInstance = new Chart(ctx3, {
+      type: "bar",
+      data: {
+        labels: stData.labels || ["Green (Normal)", "Yellow (Approaching)", "Orange (Near Limit)", "Red (Attention)"],
+        datasets: [{
+          label: "Batches Count",
+          data: stData.data || [0, 0, 0, 0],
+          backgroundColor: ["#22c55e", "#eab308", "#f97316", "#ef4444"],
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } }
+      }
+    });
+  }
+
+  // Chart 4: Mandi Market Price Trend
+  const ctx4 = document.getElementById("govMarketChart");
+  if (ctx4) {
+    if (marketChartInstance) marketChartInstance.destroy();
+    const mkt = cd.market_trend || {};
+    marketChartInstance = new Chart(ctx4, {
+      type: "line",
+      data: {
+        labels: mkt.labels || ["Day 1", "Day 2", "Day 3", "Day 4", "Day 5"],
+        datasets: [{
+          label: "Modal Price (₹/Quintal)",
+          data: mkt.data || [2300, 2350, 2340, 2380, 2400],
+          borderColor: "#0f5132",
+          backgroundColor: "rgba(15, 81, 50, 0.08)",
+          fill: true,
+          tension: 0.35,
+          pointRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } }
+      }
+    });
+  }
+}
+
+// Config Modal Handlers
+async function openSettingsModal() {
+  try {
+    const res = await fetch("/api/government/inventory/settings");
+    const data = await res.json();
+    if (data.success && data.thresholds) {
+      const t = data.thresholds;
+      document.getElementById("cfgGradeAMin").value = t.grade_a_min_days || 70;
+      document.getElementById("cfgGradeAMax").value = t.grade_a_max_days || 80;
+      document.getElementById("cfgGradeAWarn").value = t.grade_a_warn_days || 55;
+      document.getElementById("cfgURSMin").value = t.urs_min_days || 40;
+      document.getElementById("cfgURSMax").value = t.urs_max_days || 45;
+      document.getElementById("cfgURSWarn").value = t.urs_warn_days || 30;
+      document.getElementById("cfgStockHealthy").value = t.stock_healthy_days || 14;
+      document.getElementById("cfgStockCritical").value = t.stock_critical_days || 7;
+      document.getElementById("cfgStockRisk").value = t.stock_risk_days || 3;
+    }
+  } catch (e) {
+    console.error("Could not fetch thresholds:", e);
+  }
+  document.getElementById("settingsModal").style.display = "flex";
+}
+
+function closeSettingsModal() {
+  document.getElementById("settingsModal").style.display = "none";
+}
+
+async function saveSettings() {
+  const payload = {
+    grade_a_min_days: parseInt(document.getElementById("cfgGradeAMin").value),
+    grade_a_max_days: parseInt(document.getElementById("cfgGradeAMax").value),
+    grade_a_warn_days: parseInt(document.getElementById("cfgGradeAWarn").value),
+    urs_min_days: parseInt(document.getElementById("cfgURSMin").value),
+    urs_max_days: parseInt(document.getElementById("cfgURSMax").value),
+    urs_warn_days: parseInt(document.getElementById("cfgURSWarn").value),
+    stock_healthy_days: parseInt(document.getElementById("cfgStockHealthy").value),
+    stock_critical_days: parseInt(document.getElementById("cfgStockCritical").value),
+    stock_risk_days: parseInt(document.getElementById("cfgStockRisk").value)
+  };
+
+  const btn = document.getElementById("btnSaveSettings");
+  btn.disabled = true;
+  btn.textContent = "Saving...";
+
+  try {
+    const res = await fetch("/api/government/inventory/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const result = await res.json();
+    if (result.success) {
+      closeSettingsModal();
+      fetchGovPredictiveAnalytics();
+    } else {
+      alert("Error: " + (result.error || "Save failed"));
+    }
+  } catch (err) {
+    alert("Request error: " + err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Save Thresholds";
+  }
+}
+
+document.addEventListener("DOMContentLoaded", fetchGovPredictiveAnalytics);
+</script>
+{% endblock %}

@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+
+{% block title %}Procurement Officer Registration - OnionGrade AI{% endblock %}
+
+{% block public_content %}
+<div style="min-height: 85vh; display: flex; align-items: center; justify-content: center; padding: 2.5rem 1rem;">
+  <div style="background: #ffffff; border-radius: var(--radius-lg); width: 100%; max-width: 720px; padding: 2.5rem; border: 1px solid var(--border-color); box-shadow: var(--shadow-lg);">
+    
+    <div style="text-align: center; margin-bottom: 2rem;">
+      <div style="width: 58px; height: 58px; background: #fef3c7; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.75rem; font-size: 1.85rem; border: 1px solid #fde68a;">
+        🏛️
+      </div>
+      <h2 style="font-size: 1.65rem; color: var(--primary-dark); font-weight: 800; margin-bottom: 0.35rem;">
+        Procurement Officer Registration
+      </h2>
+      <p style="color: var(--text-muted); font-size: 0.9rem; max-width: 540px; margin: 0 auto;">
+        Submit your credentials for official verification. All officer registrations require Government & APMC authority approval before system access is granted.
+      </p>
+    </div>
+
+    <!-- Registration Form Container -->
+    <div id="registrationFormWrapper">
+      <form id="officerRegisterForm" enctype="multipart/form-data">
+        
+        <!-- Section 1: Personal & Contact Credentials -->
+        <div style="margin-bottom: 1.5rem;">
+          <h4 style="font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--primary-green); font-weight: 700; margin-bottom: 0.85rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.4rem;">
+            1. Personal & Contact Information
+          </h4>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="regName">Full Name *</label>
+              <input type="text" id="regName" name="name" class="form-control" placeholder="e.g. Rajesh S. Patil" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="regPhone">Mobile Number (10 digits) *</label>
+              <input type="tel" id="regPhone" name="phone" class="form-control" placeholder="e.g. 9823456789" pattern="[0-9]{10}" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="regEmail">Official Email Address *</label>
+            <input type="email" id="regEmail" name="email" class="form-control" placeholder="e.g. rajesh.patil@apmc.gov.in" required>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Used for verification notifications and official audit logs.</span>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="regPassword">Password *</label>
+              <input type="password" id="regPassword" name="password" class="form-control" placeholder="Minimum 6 characters" minlength="6" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="regConfirmPassword">Confirm Password *</label>
+              <input type="password" id="regConfirmPassword" name="confirm_password" class="form-control" placeholder="Re-enter password" minlength="6" required>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: Official Designation & Government Verification -->
+        <div style="margin-bottom: 1.5rem;">
+          <h4 style="font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--primary-green); font-weight: 700; margin-bottom: 0.85rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.4rem;">
+            2. Official Verification & Department Details
+          </h4>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="regGovIdNumber">Government / Official Employee ID *</label>
+              <input type="text" id="regGovIdNumber" name="government_id_number" class="form-control" placeholder="e.g. MH-APMC-2026-9042 or Employee ID" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="regDesignation">Official Designation *</label>
+              <input type="text" id="regDesignation" name="designation" class="form-control" placeholder="e.g. Senior Procurement Inspector" value="Procurement Officer" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="regDepartment">Organization / Department *</label>
+              <input type="text" id="regDepartment" name="department" class="form-control" placeholder="e.g. Maharashtra State Agricultural Marketing Board" value="APMC Mandi Board" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="regExperience">Experience (Years / Background)</label>
+              <input type="text" id="regExperience" name="experience_years" class="form-control" placeholder="e.g. 5 Years in APMC Grading">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="regIdProof">Upload ID Proof / Government Employee Document</label>
+            <input type="file" id="regIdProof" name="id_proof" class="form-control" accept=".pdf,.png,.jpg,.jpeg,.webp" style="padding: 0.45rem;">
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
+              Accepted formats: PDF, JPG, PNG, WEBP (Max 15MB). Government ID card, Appointment Letter, or APMC Board Badge.
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 3: Procurement Center & Jurisdiction -->
+        <div style="margin-bottom: 1.5rem;">
+          <h4 style="font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--primary-green); font-weight: 700; margin-bottom: 0.85rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.4rem;">
+            3. Procurement Center & Yard Jurisdiction
+          </h4>
+
+          <div class="form-group">
+            <label class="form-label" for="regCenter">Procurement Center / Mandi Name *</label>
+            <input type="text" id="regCenter" name="procurement_center" class="form-control" placeholder="e.g. Lasalgaon APMC Main Procurement Yard" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="regCenterAddress">Center Full Address</label>
+            <input type="text" id="regCenterAddress" name="center_address" class="form-control" placeholder="e.g. Gate No. 2, Sub-Market Yard, Station Road">
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="regVillage">Village / Town</label>
+              <input type="text" id="regVillage" name="village" class="form-control" placeholder="e.g. Lasalgaon">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="regTaluka">Taluka</label>
+              <input type="text" id="regTaluka" name="taluka" class="form-control" placeholder="e.g. Niphad">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="regDistrict">District *</label>
+              <input type="text" id="regDistrict" name="district" class="form-control" placeholder="e.g. Nashik" value="Nashik" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="regState">State *</label>
+              <input type="text" id="regState" name="state" class="form-control" value="Maharashtra" required>
+            </div>
+          </div>
+        </div>
+
+        <div id="registerErrorAlert" style="display: none; padding: 0.85rem 1rem; background: #fee2e2; border-left: 4px solid #ef4444; color: #b91c1c; font-size: 0.88rem; border-radius: var(--radius-sm); margin-bottom: 1.25rem;"></div>
+
+        <button type="submit" id="officerRegisterBtn" class="btn btn-primary" style="width: 100%; padding: 0.85rem; font-size: 1rem; font-weight: 700; box-shadow: 0 4px 14px rgba(15, 81, 50, 0.25);">
+          📋 Submit Registration for Government Verification
+        </button>
+      </form>
+
+      <div style="text-align: center; margin-top: 1.75rem; padding-top: 1.25rem; border-top: 1px solid var(--border-color); font-size: 0.875rem; color: var(--text-muted);">
+        Already approved? <a href="{{ url_for('views.login_officer') }}" style="font-weight: 600; color: var(--primary-light);">Sign In to Officer Portal →</a>
+      </div>
+    </div>
+
+    <!-- Success Confirmation State (Hidden Initially) -->
+    <div id="registrationSuccessWrapper" style="display: none; text-align: center; padding: 1.5rem 0.5rem; animation: fadeIn 0.4s ease;">
+      <div style="width: 72px; height: 72px; background: #fef3c7; border: 2px solid #f59e0b; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.25rem; font-size: 2.2rem;">
+        ⏳
+      </div>
+      
+      <div style="display: inline-block; padding: 0.35rem 1rem; background: #fffbeb; color: #b45309; border: 1px solid #fde68a; border-radius: var(--radius-full); font-size: 0.85rem; font-weight: 700; margin-bottom: 1rem;">
+        STATUS: PENDING GOVERNMENT VERIFICATION
+      </div>
+
+      <h3 style="color: #0b2545; font-size: 1.5rem; font-weight: 800; margin-bottom: 0.75rem;">
+        Registration Submitted Successfully
+      </h3>
+
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: var(--radius-md); padding: 1.25rem; max-width: 520px; margin: 0 auto 1.5rem; text-align: left;">
+        <div style="font-size: 0.88rem; color: #475569; margin-bottom: 0.5rem;">
+          <b>Application Reference ID:</b> <span id="successApplicationId" style="font-family: monospace; font-weight: 700; color: #0284c7; font-size: 1rem;">--</span>
+        </div>
+        <div style="font-size: 0.88rem; color: #475569; margin-bottom: 0.5rem;">
+          <b>Registered Center:</b> <span id="successCenter" style="font-weight: 600; color: #1e293b;">--</span>
+        </div>
+        <div style="font-size: 0.88rem; color: #475569;">
+          <b>Government Verification:</b> <span class="badge badge-warning" style="background: #fef3c7; color: #92400e; font-weight: 600;">Pending Review</span>
+        </div>
+      </div>
+
+      <div style="background: #eff6ff; border-left: 4px solid #3b82f6; padding: 1rem 1.25rem; max-width: 560px; margin: 0 auto 2rem; text-align: left; border-radius: var(--radius-sm); font-size: 0.92rem; color: #1e40af; line-height: 1.5;">
+        Registration submitted successfully. Your account is pending Government verification. You will be able to login only after your registration is approved.
+      </div>
+
+      <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+        <a href="{{ url_for('views.login_officer') }}" class="btn btn-primary" style="padding: 0.75rem 1.5rem; font-weight: 600;">
+          ← Return to Officer Login
+        </a>
+        <a href="{{ url_for('views.home') }}" class="btn btn-outline" style="padding: 0.75rem 1.5rem;">
+          Home
+        </a>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById("officerRegisterForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const errBox = document.getElementById("registerErrorAlert");
+  errBox.style.display = "none";
+
+  const pw = document.getElementById("regPassword").value;
+  const cpw = document.getElementById("regConfirmPassword").value;
+
+  if (pw !== cpw) {
+    errBox.textContent = "Passwords do not match. Please verify.";
+    errBox.style.display = "block";
+    return;
+  }
+
+  const btn = document.getElementById("officerRegisterBtn");
+  btn.disabled = true;
+  btn.innerHTML = `<span>Submitting Application for Verification...</span>`;
+
+  const formElement = document.getElementById("officerRegisterForm");
+  const formData = new FormData(formElement);
+
+  try {
+    const res = await fetch("/api/auth/register/officer", {
+      method: "POST",
+      body: formData
+    });
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+      // Display success message and pending state
+      document.getElementById("registrationFormWrapper").style.display = "none";
+      document.getElementById("successApplicationId").textContent = data.application_id || "APP-2026";
+      document.getElementById("successCenter").textContent = document.getElementById("regCenter").value;
+      document.getElementById("registrationSuccessWrapper").style.display = "block";
+      showToast("Application submitted for Government verification.", "info");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      errBox.textContent = data.error || "Registration submission failed.";
+      errBox.style.display = "block";
+      btn.disabled = false;
+      btn.textContent = "📋 Submit Registration for Government Verification";
+    }
+  } catch (err) {
+    errBox.textContent = "Network error: " + err.message + ". Please try again.";
+    errBox.style.display = "block";
+    btn.disabled = false;
+    btn.textContent = "📋 Submit Registration for Government Verification";
+  }
+});
+</script>
+{% endblock %}

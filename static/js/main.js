@@ -1,14 +1,50 @@
 // OnionGrade AI - Global JavaScript Utilities
 
 document.addEventListener("DOMContentLoaded", () => {
-  // Mobile sidebar toggle
+  // Mobile sidebar toggle & backdrop
   const toggleBtn = document.getElementById("sidebarToggle");
+  const closeBtn = document.getElementById("sidebarCloseBtn");
+  const backdrop = document.getElementById("sidebarBackdrop");
   const sidebar = document.querySelector(".app-sidebar");
-  if (toggleBtn && sidebar) {
+
+  function openSidebar() {
+    if (sidebar) sidebar.classList.add("open");
+    if (backdrop) backdrop.classList.add("active");
+    document.body.style.overflow = "hidden";
+  }
+
+  function closeSidebar() {
+    if (sidebar) sidebar.classList.remove("open");
+    if (backdrop) backdrop.classList.remove("active");
+    document.body.style.overflow = "";
+  }
+
+  if (toggleBtn) {
     toggleBtn.addEventListener("click", () => {
-      sidebar.classList.toggle("open");
+      if (sidebar && sidebar.classList.contains("open")) {
+        closeSidebar();
+      } else {
+        openSidebar();
+      }
     });
   }
+
+  if (closeBtn) {
+    closeBtn.addEventListener("click", closeSidebar);
+  }
+
+  if (backdrop) {
+    backdrop.addEventListener("click", closeSidebar);
+  }
+
+  // Auto close mobile sidebar when navigating via nav link
+  document.querySelectorAll(".sidebar-nav .nav-item").forEach((link) => {
+    link.addEventListener("click", () => {
+      if (window.innerWidth <= 992) {
+        closeSidebar();
+      }
+    });
+  });
 
   // Password visibility toggle helper
   document.querySelectorAll(".password-toggle-btn").forEach((btn) => {

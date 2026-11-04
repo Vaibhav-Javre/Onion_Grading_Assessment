@@ -63,6 +63,7 @@ def get_reports():
     search_query = request.args.get("search", "").strip()
     status_filter = request.args.get("status", "").strip()
     grade_filter = request.args.get("grade", "").strip()
+    lang_filter = request.args.get("language", "").strip() or request.args.get("lang", "").strip()
 
     query = Evaluation.query.filter_by(farmer_id=farmer.id, status="confirmed")
 
@@ -70,6 +71,8 @@ def get_reports():
         query = query.filter(Evaluation.report_id.ilike(f"%{search_query}%"))
     if status_filter:
         query = query.filter(Evaluation.status == status_filter)
+    if lang_filter:
+        query = query.filter(Evaluation.report_language == lang_filter)
     if grade_filter:
         if grade_filter == "Grade A":
             query = query.filter(Evaluation.overall_result.ilike("%Grade A%"))
@@ -114,3 +117,22 @@ def get_report_detail(report_identifier):
         "success": True,
         "report": eval_record.to_dict()
     }), 200
+
+
+@farmer_bp.route("/predictive-insights", methods=["GET"])
+@login_required
+@role_required("farmer")
+def get_predictive_insights():
+    """
+    Returns farmer-specific stock status, storage-life planning,
+    market price conditions, and AI-assisted sell/monitor/retain guidance.
+    Strictly isolated: farmer can only see their own stock.
+    """
+    user = get_current_user()
+    farmer = user.farmer_profile
+    if not farmer:
+        return jsonify({"success": False, "error": "Farmer profile not found."}), 404
+
+    from backend.services.predictive_inventory_service import PredictiveInventoryService
+    data = PredictiveInventoryService.get_farmer_insights(farmer.id)
+    return jsonify(data), 200

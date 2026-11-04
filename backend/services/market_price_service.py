@@ -109,6 +109,7 @@ BENCHMARK_MANDI_DATA = [
 
 class MarketPriceService:
     _last_fetch_timestamp = 0
+    _is_syncing = False
 
     @staticmethod
     def seed_or_update_benchmark_prices():
@@ -137,27 +138,74 @@ class MarketPriceService:
             print(f"[MarketPriceService] Error seeding market prices: {e}")
 
     @staticmethod
-    def get_market_prices(district=None, market_name=None):
+    def get_market_prices(district=None, market_name=None, search=None):
         """
-        Retrieves market prices with optional district / market filtering.
-        Tries external API if key is set, else serves latest stored Mandi records.
+        Retrieves market prices with comprehensive live search across
+        market name, district, state, variety, and commodity.
         """
-        # Seed if empty
+        # Seed default benchmark prices if table is empty
         MarketPriceService.seed_or_update_benchmark_prices()
 
-        # If external API is configured, attempt live sync
+        # Trigger non-blocking background sync if external API is configured
         if Config.MARKET_API_KEY and Config.MARKET_API_URL:
             MarketPriceService._fetch_external_api_data()
 
+        from sqlalchemy import or_
+
         query = MarketPrice.query
+        search_term = (search or market_name or "").strip()
+        has_district = bool(district and district.strip() and district.lower() != "all")
 
-        if district and district.strip() and district.lower() != "all":
+        if has_district and search_term:
+            search_pattern = f"%{search_term}%"
+            district_pattern = f"%{district.strip()}%"
+
+            # 1. First try matching within selected district
+            scoped_query = query.filter(
+                MarketPrice.district.ilike(district_pattern),
+                or_(
+                    MarketPrice.market_name.ilike(search_pattern),
+                    MarketPrice.state.ilike(search_pattern),
+                    MarketPrice.variety.ilike(search_pattern),
+                    MarketPrice.commodity.ilike(search_pattern)
+                )
+            )
+            records = scoped_query.order_by(MarketPrice.modal_price.desc()).all()
+
+            # 2. If no results found in selected district, search all mandis nationally
+            # so the user never gets an empty screen if their search matches other districts
+            if not records:
+                global_query = query.filter(
+                    or_(
+                        MarketPrice.market_name.ilike(search_pattern),
+                        MarketPrice.district.ilike(search_pattern),
+                        MarketPrice.state.ilike(search_pattern),
+                        MarketPrice.variety.ilike(search_pattern),
+                        MarketPrice.commodity.ilike(search_pattern)
+                    )
+                )
+                records = global_query.order_by(MarketPrice.modal_price.desc()).all()
+
+        elif search_term:
+            search_pattern = f"%{search_term}%"
+            query = query.filter(
+                or_(
+                    MarketPrice.market_name.ilike(search_pattern),
+                    MarketPrice.district.ilike(search_pattern),
+                    MarketPrice.state.ilike(search_pattern),
+                    MarketPrice.variety.ilike(search_pattern),
+                    MarketPrice.commodity.ilike(search_pattern)
+                )
+            )
+            records = query.order_by(MarketPrice.modal_price.desc()).all()
+
+        elif has_district:
             query = query.filter(MarketPrice.district.ilike(f"%{district.strip()}%"))
+            records = query.order_by(MarketPrice.modal_price.desc()).all()
 
-        if market_name and market_name.strip() and market_name.lower() != "all":
-            query = query.filter(MarketPrice.market_name.ilike(f"%{market_name.strip()}%"))
+        else:
+            records = query.order_by(MarketPrice.modal_price.desc()).all()
 
-        records = query.order_by(MarketPrice.modal_price.desc()).all()
         return [r.to_dict() for r in records]
 
     @staticmethod
@@ -183,23 +231,50 @@ class MarketPriceService:
 
     @staticmethod
     def _fetch_external_api_data():
-        """Attempts to sync data from government portal (Data.gov.in / Agmarknet API)."""
+        """Initiates non-blocking background sync from government portal (Data.gov.in / Agmarknet API)."""
+        import threading
+        from flask import current_app
+
         now = time.time()
-        # Respect cache TTL so we don't hit the external API on every single request
+        # Respect cache TTL
         if now - MarketPriceService._last_fetch_timestamp < Config.MARKET_CACHE_TTL_SECONDS:
             return
 
+        if MarketPriceService._is_syncing:
+            return
+
+        try:
+            app = current_app._get_current_object()
+        except RuntimeError:
+            app = None
+
+        def run_sync():
+            MarketPriceService._is_syncing = True
+            try:
+                if app:
+                    with app.app_context():
+                        MarketPriceService._perform_sync()
+                else:
+                    MarketPriceService._perform_sync()
+            finally:
+                MarketPriceService._is_syncing = False
+
+        threading.Thread(target=run_sync, daemon=True).start()
+
+    @staticmethod
+    def _perform_sync():
+        now = time.time()
         try:
             params = {
                 "api-key": Config.MARKET_API_KEY,
                 "format": "json",
                 "filters[commodity]": "Onion",
-                "limit": 50
+                "limit": 100
             }
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             }
-            res = requests.get(Config.MARKET_API_URL, params=params, headers=headers, timeout=12)
+            res = requests.get(Config.MARKET_API_URL, params=params, headers=headers, timeout=10)
             if res.status_code == 200:
                 data = res.json()
                 records = data.get("records", [])
@@ -248,4 +323,5 @@ class MarketPriceService:
                 print(f"[MarketPriceService] Successfully synced {synced_count} live Mandi records from Data.gov.in!")
         except Exception as e:
             db.session.rollback()
-            print(f"[MarketPriceService] External API fetch warning (using cached data): {e}")
+            print(f"[MarketPriceService] Background external API fetch note: {e}")
+

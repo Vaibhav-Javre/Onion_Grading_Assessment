@@ -1,8 +1,9 @@
 import csv
 import io
+import os
 from datetime import datetime, timezone
 
-from flask import Blueprint, Response, jsonify, request
+from flask import Blueprint, Response, jsonify, request, send_from_directory
 
 from backend.database.db import db
 from backend.models.audit import AuditLog
@@ -13,7 +14,13 @@ from backend.models.transaction import ProcurementTransaction
 from backend.models.user import User
 from backend.services.market_price_service import MarketPriceService
 from backend.utils.audit_helpers import record_audit_log
-from backend.utils.auth_helpers import get_current_user, login_required, role_required
+from backend.utils.auth_helpers import (
+    generate_officer_id,
+    get_current_user,
+    login_required,
+    role_required,
+)
+from config import Config
 
 government_bp = Blueprint("government_bp", __name__, url_prefix="/api/government")
 
@@ -35,7 +42,15 @@ def get_dashboard_data():
     - Quality Distribution & District-Wise Aggregations
     """
     total_farmers = FarmerProfile.query.count()
-    total_officers = OfficerProfile.query.count()
+    all_officer_profiles = OfficerProfile.query.all()
+    total_officers = len(all_officer_profiles)
+
+    # Officer Verification KPI Statistics
+    officer_requests_total = len(all_officer_profiles)
+    officer_pending_count = len([o for o in all_officer_profiles if (o.status or "").upper() == "PENDING"])
+    officer_approved_count = len([o for o in all_officer_profiles if (o.status or "").upper() == "APPROVED"])
+    officer_rejected_count = len([o for o in all_officer_profiles if (o.status or "").upper() == "REJECTED"])
+    officer_active_count = len([o for o in all_officer_profiles if (o.status or "").upper() == "APPROVED" and o.is_active])
 
     # Distinct procurement centers
     centers_query = db.session.query(OfficerProfile.procurement_center).distinct().all()
@@ -137,12 +152,19 @@ def get_dashboard_data():
         "success": True,
         "summary": {
             "total_farmers": total_farmers,
-            "total_officers": total_officers,
+            "total_officers": officer_approved_count or total_officers,
             "total_centers": total_centers,
             "total_evaluations": total_evaluations,
             "total_onions": total_onions,
             "total_payout": round(total_payout, 2),
             "total_quintals": round(total_quintals, 2),
+            "officer_stats": {
+                "total_requests": officer_requests_total,
+                "pending_requests": officer_pending_count,
+                "approved_officers": officer_approved_count,
+                "rejected_requests": officer_rejected_count,
+                "active_officers": officer_active_count
+            },
             "grades": {
                 "grade_a": {"count": total_grade_a, "percentage": grade_a_pct},
                 "urs": {"count": total_urs, "percentage": urs_pct},
@@ -154,6 +176,13 @@ def get_dashboard_data():
                 "rotten": {"count": total_rotten, "percentage": round((total_rotten / total_onions * 100) if total_onions else 0.0, 1)},
                 "sprouted": {"count": total_sprouted, "percentage": round((total_sprouted / total_onions * 100) if total_onions else 0.0, 1)}
             }
+        },
+        "officer_stats": {
+            "total_requests": officer_requests_total,
+            "pending_requests": officer_pending_count,
+            "approved_officers": officer_approved_count,
+            "rejected_requests": officer_rejected_count,
+            "active_officers": officer_active_count
         },
         "recent_evaluations": recent_evaluations,
         "recent_transactions": recent_transactions,
@@ -352,6 +381,230 @@ def get_officer_detail(officer_id):
         "evaluations": evals,
         "transactions": txns
     }), 200
+
+
+# =========================================================
+# 3B. OFFICER VERIFICATION & APPROVAL WORKFLOW
+# =========================================================
+@government_bp.route("/officer-verification/list", methods=["GET"])
+@login_required
+@role_required("government", "admin")
+def list_officer_verifications():
+    """
+    Returns list of officer registration applications for Government verification.
+    Filters: status (all, PENDING, APPROVED, REJECTED), search, district, center.
+    """
+    status_filter = request.args.get("status", "").strip().upper()
+    search_query = request.args.get("search", "").strip().lower()
+    district_filter = request.args.get("district", "").strip().lower()
+    center_filter = request.args.get("center", "").strip().lower()
+
+    all_officers = OfficerProfile.query.order_by(OfficerProfile.created_at.desc(), OfficerProfile.id.desc()).all()
+
+    # Calculate statistics across all requests
+    total_requests = len(all_officers)
+    pending_count = len([o for o in all_officers if (o.status or "").upper() == "PENDING"])
+    approved_count = len([o for o in all_officers if (o.status or "").upper() == "APPROVED"])
+    rejected_count = len([o for o in all_officers if (o.status or "").upper() == "REJECTED"])
+    active_count = len([o for o in all_officers if (o.status or "").upper() == "APPROVED" and o.is_active])
+
+    filtered = []
+    for o in all_officers:
+        user = o.user
+        name = user.name if user else ""
+        phone = user.phone if user else ""
+        email = user.email if user else ""
+        status = (o.status or "PENDING").upper()
+        app_id = o.application_id or o.officer_id or ""
+        off_id = o.officer_id or ""
+        gov_id = o.government_id_number or ""
+        center = o.procurement_center or ""
+        dist = o.district or ""
+
+        # Status filter
+        if status_filter and status_filter != "ALL" and status != status_filter:
+            continue
+
+        # District filter
+        if district_filter and district_filter != "all" and district_filter not in dist.lower():
+            continue
+
+        # Center filter
+        if center_filter and center_filter != "all" and center_filter not in center.lower():
+            continue
+
+        # Search filter
+        if search_query:
+            match = (
+                search_query in app_id.lower() or
+                search_query in off_id.lower() or
+                search_query in name.lower() or
+                search_query in phone.lower() or
+                search_query in email.lower() or
+                search_query in gov_id.lower() or
+                search_query in center.lower() or
+                search_query in dist.lower() or
+                search_query in (o.designation or "").lower() or
+                search_query in (o.department or "").lower()
+            )
+            if not match:
+                continue
+
+        filtered.append(o.to_dict())
+
+    return jsonify({
+        "success": True,
+        "stats": {
+            "total_requests": total_requests,
+            "pending_requests": pending_count,
+            "approved_officers": approved_count,
+            "rejected_requests": rejected_count,
+            "active_officers": active_count
+        },
+        "count": len(filtered),
+        "applications": filtered
+    }), 200
+
+
+@government_bp.route("/officer-verification/<int:officer_id>", methods=["GET"])
+@login_required
+@role_required("government", "admin")
+def get_officer_verification_detail(officer_id):
+    """
+    Returns full application details for an officer verification request.
+    """
+    officer = db.session.get(OfficerProfile, officer_id)
+    if not officer:
+        return jsonify({"success": False, "error": "Officer application not found."}), 404
+
+    return jsonify({
+        "success": True,
+        "application": officer.to_dict()
+    }), 200
+
+
+@government_bp.route("/officer-verification/<int:officer_id>/approve", methods=["POST"])
+@login_required
+@role_required("government", "admin")
+def approve_officer_verification(officer_id):
+    """
+    Approves a Procurement Officer application:
+    - Activates the account (is_active = True)
+    - Generates & assigns unique official Officer ID (OFF-2026-00X)
+    - Sets status = 'APPROVED'
+    - Records audit log
+    - Enables officer login
+    """
+    gov_user = get_current_user()
+    officer = db.session.get(OfficerProfile, officer_id)
+    if not officer:
+        return jsonify({"success": False, "error": "Officer record not found."}), 404
+
+    # Generate official Officer ID if not already assigned with OFF-
+    assigned_officer_id = officer.officer_id
+    if not assigned_officer_id or not assigned_officer_id.startswith("OFF-"):
+        assigned_officer_id = generate_officer_id()
+        officer.officer_id = assigned_officer_id
+
+    officer.status = "APPROVED"
+    officer.is_active = True
+    officer.rejection_reason = None
+    officer.verified_by = gov_user.name if gov_user else "Government Administrator"
+    officer.verified_at = datetime.now(timezone.utc)
+
+    db.session.commit()
+
+    record_audit_log(
+        action="APPROVE_OFFICER",
+        entity_type="officer",
+        entity_id=assigned_officer_id,
+        details={
+            "application_id": officer.application_id,
+            "assigned_officer_id": assigned_officer_id,
+            "officer_name": officer.user.name if officer.user else "",
+            "procurement_center": officer.procurement_center,
+            "government_id_number": officer.government_id_number,
+            "approved_by": officer.verified_by
+        },
+        user=gov_user
+    )
+
+    return jsonify({
+        "success": True,
+        "message": f"Procurement Officer {officer.user.name if officer.user else ''} approved successfully. Assigned Officer ID: {assigned_officer_id}",
+        "officer": officer.to_dict()
+    }), 200
+
+
+@government_bp.route("/officer-verification/<int:officer_id>/reject", methods=["POST"])
+@login_required
+@role_required("government", "admin")
+def reject_officer_verification(officer_id):
+    """
+    Rejects a Procurement Officer application:
+    - Keeps account inactive (is_active = False)
+    - Sets status = 'REJECTED'
+    - Stores rejection reason
+    - Records audit log
+    - Blocks officer login
+    """
+    gov_user = get_current_user()
+    officer = db.session.get(OfficerProfile, officer_id)
+    if not officer:
+        return jsonify({"success": False, "error": "Officer record not found."}), 404
+
+    data = request.get_json() or {}
+    reason = data.get("reason", "").strip()
+    if not reason:
+        reason = "Submitted identification documents or qualifications could not be verified by Government authority."
+
+    officer.status = "REJECTED"
+    officer.is_active = False
+    officer.rejection_reason = reason
+    officer.verified_by = gov_user.name if gov_user else "Government Administrator"
+    officer.verified_at = datetime.now(timezone.utc)
+
+    db.session.commit()
+
+    record_audit_log(
+        action="REJECT_OFFICER",
+        entity_type="officer",
+        entity_id=officer.application_id or officer.officer_id,
+        details={
+            "application_id": officer.application_id,
+            "officer_name": officer.user.name if officer.user else "",
+            "procurement_center": officer.procurement_center,
+            "rejection_reason": reason,
+            "rejected_by": officer.verified_by
+        },
+        user=gov_user
+    )
+
+    return jsonify({
+        "success": True,
+        "message": f"Procurement Officer application {officer.application_id or officer.officer_id} rejected.",
+        "officer": officer.to_dict()
+    }), 200
+
+
+@government_bp.route("/officer-verification/<int:officer_id>/document", methods=["GET"])
+@login_required
+@role_required("government", "admin", "officer")
+def view_officer_id_proof(officer_id):
+    """
+    Securely serves the uploaded ID proof document for an officer application.
+    """
+    officer = db.session.get(OfficerProfile, officer_id)
+    if not officer or not officer.id_proof_path:
+        return jsonify({"success": False, "error": "Document not found."}), 404
+
+    doc_path = os.path.join(Config.UPLOAD_FOLDER, officer.id_proof_path)
+    if not os.path.exists(doc_path):
+        return jsonify({"success": False, "error": "Document file does not exist on server."}), 404
+
+    dir_name = os.path.dirname(doc_path)
+    file_name = os.path.basename(doc_path)
+    return send_from_directory(dir_name, file_name)
 
 
 # =========================================================
@@ -841,3 +1094,74 @@ def global_search():
             "reports": matched_reports[:8]
         }
     }), 200
+
+
+# =========================================================
+# PREDICTIVE INVENTORY & MACRO STOCK ANALYTICS APIS
+# =========================================================
+@government_bp.route("/predictive-inventory", methods=["GET"])
+@login_required
+@role_required("government", "admin")
+def get_predictive_inventory_analytics():
+    """
+    Returns statewide predictive inventory, center-wise breakdown,
+    category distributions, demand forecasting, stock depletion risks,
+    and storage-life planning metrics across all procurement centers.
+    """
+    center = request.args.get("center", "").strip() or None
+    district = request.args.get("district", "").strip() or None
+    grade = request.args.get("grade", "").strip() or None
+    risk = request.args.get("risk", "").strip() or None
+
+    filters = {
+        "center": center,
+        "district": district,
+        "grade": grade,
+        "risk": risk
+    }
+
+    from backend.services.predictive_inventory_service import PredictiveInventoryService
+    data = PredictiveInventoryService.get_government_analytics(filters)
+    return jsonify(data), 200
+
+
+@government_bp.route("/inventory/settings", methods=["GET", "POST"])
+@login_required
+@role_required("government", "admin")
+def manage_inventory_settings():
+    """
+    Allows Government / Admin users to view and dynamically configure
+    storage-life planning thresholds and stock risk alert horizons.
+    """
+    from backend.models.inventory import InventorySetting
+    from backend.services.predictive_inventory_service import PredictiveInventoryService
+
+    if request.method == "POST":
+        payload = request.get_json(silent=True) or {}
+        allowed_keys = [
+            "grade_a_min_days", "grade_a_max_days", "grade_a_warn_days",
+            "urs_min_days", "urs_max_days", "urs_warn_days",
+            "stock_healthy_days", "stock_low_days", "stock_critical_days", "stock_risk_days"
+        ]
+        updated = {}
+        for k in allowed_keys:
+            if k in payload:
+                try:
+                    val = int(payload[k])
+                    InventorySetting.set_setting(k, str(val))
+                    updated[k] = val
+                except (ValueError, TypeError):
+                    pass
+
+        return jsonify({
+            "success": True,
+            "message": "Inventory thresholds updated successfully.",
+            "thresholds": PredictiveInventoryService.get_thresholds()
+        }), 200
+
+    # GET
+    return jsonify({
+        "success": True,
+        "thresholds": PredictiveInventoryService.get_thresholds()
+    }), 200
+

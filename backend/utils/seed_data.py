@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from backend.database.db import db
 from backend.models.evaluation import Evaluation, EvaluationItem
 from backend.models.farmer import FarmerProfile
-from backend.models.officer import OfficerProfile
+from backend.models.officer import OfficerFarmer, OfficerProfile
 from backend.models.report import Report
 from backend.models.user import User
 from backend.services.market_price_service import MarketPriceService
@@ -59,7 +59,28 @@ def seed_demo_data():
 
     # Check if officer already exists
     existing_officer_user = User.query.filter_by(role="officer").first()
-    if existing_officer_user:
+    if existing_officer_user and existing_officer_user.officer_profile:
+        op = existing_officer_user.officer_profile
+        op.status = "APPROVED"
+        op.is_active = True
+        if not op.application_id:
+            op.application_id = "APP-2026-0001"
+        if not op.government_id_number:
+            op.government_id_number = "MH-APMC-OFF-8821"
+        if not op.designation:
+            op.designation = "Senior APMC Procurement Inspector"
+        if not op.department:
+            op.department = "Maharashtra State Agricultural Marketing Board"
+
+        # Ensure demo farmers (FMR-2026-0001 & FMR-2026-0002) are linked to demo officer
+        f1 = FarmerProfile.query.filter_by(farmer_id="FMR-2026-0001").first()
+        if f1 and not OfficerFarmer.query.filter_by(officer_id=op.id, farmer_id=f1.id).first():
+            db.session.add(OfficerFarmer(officer_id=op.id, farmer_id=f1.id))
+        f2 = FarmerProfile.query.filter_by(farmer_id="FMR-2026-0002").first()
+        if f2 and not OfficerFarmer.query.filter_by(officer_id=op.id, farmer_id=f2.id).first():
+            db.session.add(OfficerFarmer(officer_id=op.id, farmer_id=f2.id))
+
+        db.session.commit()
         return
 
     print("[SeedData] Seeding demo accounts and historical evaluations...")
@@ -78,8 +99,22 @@ def seed_demo_data():
     officer_profile = OfficerProfile(
         user_id=officer_user.id,
         officer_id="OFF-2026-001",
+        application_id="APP-2026-0001",
+        status="APPROVED",
+        is_active=True,
+        government_id_number="MH-APMC-OFF-8821",
+        designation="Senior APMC Procurement Inspector",
+        department="Maharashtra State Agricultural Marketing Board",
         procurement_center="Lasalgaon APMC Main Procurement Yard",
-        location="Lasalgaon, Nashik"
+        center_address="Lasalgaon APMC Yard, Gate 2, Niphad",
+        location="Lasalgaon, Nashik",
+        village="Lasalgaon",
+        taluka="Niphad",
+        district="Nashik",
+        state="Maharashtra",
+        experience_years="8 years",
+        verified_by="Dr. A. Sharma, IAS",
+        verified_at=datetime.now(timezone.utc)
     )
     db.session.add(officer_profile)
 
@@ -125,6 +160,13 @@ def seed_demo_data():
     )
     db.session.add(farmer2_profile)
     db.session.flush()
+
+    # Link demo farmers to demo officer
+    if not OfficerFarmer.query.filter_by(officer_id=officer_profile.id, farmer_id=farmer1_profile.id).first():
+        db.session.add(OfficerFarmer(officer_id=officer_profile.id, farmer_id=farmer1_profile.id))
+    if not OfficerFarmer.query.filter_by(officer_id=officer_profile.id, farmer_id=farmer2_profile.id).first():
+        db.session.add(OfficerFarmer(officer_id=officer_profile.id, farmer_id=farmer2_profile.id))
+    db.session.commit()
 
     # 4. Create Historical Evaluations for Farmer 1
     sample_src_1 = os.path.join(Config.STATIC_SAMPLES_FOLDER, "onion1.jpg")

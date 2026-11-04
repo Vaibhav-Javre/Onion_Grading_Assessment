@@ -1,0 +1,615 @@
+{% extends "base.html" %}
+
+{% block title %}Predictive Inventory - Officer Portal{% endblock %}
+{% block page_title %}Predictive Inventory & Decision Support{% endblock %}
+
+{% block content %}
+<!-- Top Header with Actions -->
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h1 style="font-size: 1.75rem; color: var(--primary-dark);">Predictive Inventory & Stock Decisions</h1>
+    <p style="color: var(--text-muted); font-size: 0.95rem;">
+      Center: <b id="headerCenterName">{{ officer.procurement_center or 'Lasalgaon APMC Mandi' }}</b> • AI-assisted stock-out analysis, storage-life planning, and demand forecasting.
+    </p>
+  </div>
+  <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+    <button onclick="loadPredictiveInventory()" class="btn btn-sm btn-outline">🔄 Refresh Analysis</button>
+  </div>
+</div>
+
+<!-- Human-in-the-Loop Advisory Notice -->
+<div style="background: #f8fafc; border-left: 4px solid var(--primary-light); padding: 0.85rem 1.2rem; border-radius: var(--radius-sm); margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+  <div style="font-size: 0.88rem; color: #334155;">
+    <b style="color: var(--primary-dark);">Decision Support Protocol:</b> Recommendations are AI-assisted estimates derived from current warehouse balances and historical demand velocity. All inventory movements require officer review and manual confirmation.
+  </div>
+  <span class="badge badge-success" style="font-size: 0.75rem;">Officer Review Required</span>
+</div>
+
+<!-- 6 KPI Top Summary Cards -->
+<div class="dashboard-grid" style="margin-bottom: 1.75rem;">
+  <!-- Total Current Stock -->
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Total Active Stock</span>
+      <span id="kpiTotalStock" class="stat-value" style="color: var(--primary-dark);">-- kg</span>
+      <span id="kpiTotalStockQ" class="stat-sub">-- quintals available</span>
+    </div>
+    <div class="stat-icon green">📦</div>
+  </div>
+
+  <!-- Forecasted 7-Day Demand -->
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">7-Day Demand (AI Forecast)</span>
+      <span id="kpiDemand7d" class="stat-value" style="color: #1e3a8a;">-- kg</span>
+      <span id="kpiDailyRate" class="stat-sub">Avg -- kg / day</span>
+    </div>
+    <div class="stat-icon blue">📈</div>
+  </div>
+
+  <!-- Forecasted 14-Day Demand -->
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">14-Day Demand (AI Forecast)</span>
+      <span id="kpiDemand14d" class="stat-value" style="color: #0284c7;">-- kg</span>
+      <span id="kpiReliability" class="stat-sub">Reliability: Calculating</span>
+    </div>
+    <div class="stat-icon blue">📊</div>
+  </div>
+
+  <!-- Stock-Out Risk / Days Remaining -->
+  <div class="stat-card" id="kpiStockRiskCard">
+    <div class="stat-info">
+      <span class="stat-label">Estimated Days Remaining</span>
+      <span id="kpiDaysRemaining" class="stat-value" style="color: var(--grade-a);">-- days</span>
+      <span id="kpiStockoutDate" class="stat-sub">Stock-out: Calculating...</span>
+    </div>
+    <div class="stat-icon" id="kpiRiskIcon">🟢</div>
+  </div>
+
+  <!-- Storage-Life Risk Count -->
+  <div class="stat-card urs">
+    <div class="stat-info">
+      <span class="stat-label">Storage-Life Warnings</span>
+      <span id="kpiStorageWarnings" class="stat-value" style="color: var(--grade-urs);">--</span>
+      <span class="stat-sub">Batches near or past planning limit</span>
+    </div>
+    <div class="stat-icon amber">⏳</div>
+  </div>
+
+  <!-- Low Stock Alert -->
+  <div class="stat-card" id="kpiLowStockCard">
+    <div class="stat-info">
+      <span class="stat-label">Stock Status Alert</span>
+      <span id="kpiStockStatus" class="stat-value" style="font-size: 1.15rem;">Analyzing</span>
+      <span id="kpiStockStatusSub" class="stat-sub">Safety threshold check</span>
+    </div>
+    <div class="stat-icon blue">🛡️</div>
+  </div>
+</div>
+
+<!-- Recommendations Row: Sell First & Retain / Store -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+  
+  <!-- SELL FIRST RECOMMENDATION -->
+  <div class="card" style="margin-bottom: 0; border-top: 4px solid #f97316;">
+    <div class="card-header" style="background: #fff7ed;">
+      <h3 style="font-size: 1.1rem; color: #9a3412; display: flex; align-items: center; gap: 0.5rem;">
+        <span>⚡</span> AI-Assisted "Sell First" Priority
+      </h3>
+      <span class="badge" style="background: #ffedd5; color: #c2410c; font-weight: 700;">Priority Dispatch</span>
+    </div>
+    <div style="padding: 1.25rem;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.75rem;">
+        <span style="font-size: 0.85rem; color: var(--text-muted);">Recommended Category:</span>
+        <b id="sellCategory" style="font-size: 1.1rem; color: #ea580c;">--</b>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px dashed var(--border-color);">
+        <span style="font-size: 0.85rem; color: var(--text-muted);">Recommended Sale Quantity:</span>
+        <b id="sellQuantity" style="font-size: 1.2rem; color: var(--text-dark);">-- kg</b>
+      </div>
+      <div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: var(--radius-sm); padding: 0.85rem; margin-bottom: 1rem;">
+        <div style="font-size: 0.8rem; font-weight: 700; color: #9a3412; margin-bottom: 0.25rem;">Evidence & Rationale:</div>
+        <p id="sellReason" style="font-size: 0.88rem; color: #c2410c; margin: 0; line-height: 1.45;">
+          Calculating prioritization rules...
+        </p>
+      </div>
+      <button onclick="openQuickDispatchModal('sellFirst')" class="btn btn-sm btn-outline" style="width: 100%; border-color: #fdba74; color: #c2410c;">
+        📤 Record Sale / Dispatch for this Category
+      </button>
+    </div>
+  </div>
+
+  <!-- RETAIN / STORE RECOMMENDATION -->
+  <div class="card" style="margin-bottom: 0; border-top: 4px solid var(--primary-light);">
+    <div class="card-header" style="background: #f0fdf4;">
+      <h3 style="font-size: 1.1rem; color: var(--primary-dark); display: flex; align-items: center; gap: 0.5rem;">
+        <span>🔒</span> AI-Assisted "Retain / Store" Guidance
+      </h3>
+      <span class="badge badge-success">Buffer Retention</span>
+    </div>
+    <div style="padding: 1.25rem;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.75rem;">
+        <span style="font-size: 0.85rem; color: var(--text-muted);">Recommended Category:</span>
+        <b id="retainCategory" style="font-size: 1.1rem; color: var(--primary-green);">--</b>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px dashed var(--border-color);">
+        <span style="font-size: 0.85rem; color: var(--text-muted);">Recommended Retention Quantity:</span>
+        <b id="retainQuantity" style="font-size: 1.2rem; color: var(--text-dark);">-- kg</b>
+      </div>
+      <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-sm); padding: 0.85rem; margin-bottom: 1rem;">
+        <div style="font-size: 0.8rem; font-weight: 700; color: #166534; margin-bottom: 0.25rem;">Evidence & Rationale:</div>
+        <p id="retainReason" style="font-size: 0.88rem; color: #15803d; margin: 0; line-height: 1.45;">
+          Evaluating storage durability and demand pressures...
+        </p>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: var(--text-muted); padding: 0.4rem 0;">
+        <span>Estimated Remaining Planning Window:</span>
+        <b id="retainWindow" style="color: var(--primary-dark);">--</b>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Category Breakdown Table -->
+<div class="card" style="margin-bottom: 2rem;">
+  <div class="card-header">
+    <h3 style="font-size: 1.15rem;">Category-Wise Inventory & Planning Overview</h3>
+    <span class="badge badge-info">Standard Quality Categories</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Category</th>
+          <th>Current Stock</th>
+          <th>Forecasted Demand</th>
+          <th>Days Remaining</th>
+          <th>Storage Age (Avg)</th>
+          <th>Storage Status</th>
+          <th>Stock Alert</th>
+          <th>Recommendation</th>
+          <th>Recommended Qty</th>
+        </tr>
+      </thead>
+      <tbody id="categoryTableBody">
+        <tr>
+          <td colspan="9" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+            Aggregating category metrics...
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Active Batches & Inventory Actions -->
+<div class="card">
+  <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+    <div>
+      <h3 style="font-size: 1.15rem;">Warehouse Batches & Physical Stock Management</h3>
+      <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">
+        Update missing physical quantities or register outbound movements.
+      </p>
+    </div>
+    <div style="display: flex; gap: 0.5rem;">
+      <input type="text" id="batchSearchInput" placeholder="Filter batch ID or farmer..." onkeyup="filterBatchesTable()" class="form-control" style="width: 220px; font-size: 0.85rem; padding: 0.4rem 0.6rem;">
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="batchesTable">
+      <thead>
+        <tr>
+          <th>Batch ID</th>
+          <th>Farmer</th>
+          <th>Stored Date</th>
+          <th>Grade</th>
+          <th>Physical Quantity</th>
+          <th>Storage Age</th>
+          <th>Planning Status</th>
+          <th>Estimated Risk Window</th>
+          <th style="text-align: right;">Action</th>
+        </tr>
+      </thead>
+      <tbody id="officerBatchesBody">
+        <tr>
+          <td colspan="9" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">
+            Loading center inventory batches...
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal 1: Update Physical Quantity -->
+<div id="updateQtyModal" class="modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1050; align-items: center; justify-content: center;">
+  <div style="background: #ffffff; border-radius: var(--radius-md); max-width: 480px; width: 90%; padding: 1.75rem; box-shadow: var(--shadow-xl); position: relative;">
+    <h3 style="font-size: 1.25rem; margin-bottom: 0.5rem; color: var(--primary-dark);">Enter / Update Physical Quantity</h3>
+    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem;">
+      Record measured physical lot weight for Batch <b id="modalBatchId">--</b>.
+    </p>
+
+    <div style="margin-bottom: 1rem;">
+      <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.35rem;">Physical Quantity</label>
+      <div style="display: flex; gap: 0.5rem;">
+        <input type="number" id="modalQtyInput" step="any" min="0" placeholder="e.g. 500" class="form-control" style="flex: 1; padding: 0.6rem;">
+        <select id="modalQtyUnit" class="form-control" style="width: 110px; padding: 0.6rem;">
+          <option value="kg" selected>kg</option>
+          <option value="quintals">Quintals</option>
+          <option value="tonnes">Tonnes</option>
+        </select>
+      </div>
+      <small style="color: var(--text-muted); font-size: 0.78rem;">Physical weight is never guessed. Enter verified scale receipt weight.</small>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
+      <button type="button" onclick="closeQtyModal()" class="btn btn-outline">Cancel</button>
+      <button type="button" onclick="submitQtyUpdate()" class="btn btn-primary" id="modalSaveQtyBtn">Save Quantity</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal 2: Record Outbound Dispatch / Sale -->
+<div id="dispatchModal" class="modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1050; align-items: center; justify-content: center;">
+  <div style="background: #ffffff; border-radius: var(--radius-md); max-width: 500px; width: 90%; padding: 1.75rem; box-shadow: var(--shadow-xl); position: relative;">
+    <h3 style="font-size: 1.25rem; margin-bottom: 0.5rem; color: var(--primary-dark);">Record Outbound Sale / Dispatch</h3>
+    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem;">
+      Batch: <b id="dispatchBatchId">--</b> • Current Available: <b id="dispatchAvailableKg">0</b> kg
+    </p>
+
+    <div style="margin-bottom: 1rem;">
+      <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.35rem;">Quantity to Dispatch (kg)</label>
+      <input type="number" id="dispatchQtyInput" step="any" min="1" placeholder="e.g. 250" class="form-control" style="width: 100%; padding: 0.6rem;">
+      <small style="color: var(--text-muted); font-size: 0.78rem;">Must not exceed available stock.</small>
+    </div>
+
+    <div style="margin-bottom: 1rem;">
+      <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.35rem;">Destination / Trader</label>
+      <input type="text" id="dispatchDestination" placeholder="e.g. Mumbai Wholesale Trader / Processing Unit" class="form-control" style="width: 100%; padding: 0.6rem;">
+    </div>
+
+    <div style="margin-bottom: 1rem;">
+      <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.35rem;">Reason for Dispatch</label>
+      <input type="text" id="dispatchReason" value="Sale fulfillment / Regular APMC dispatch" class="form-control" style="width: 100%; padding: 0.6rem;">
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
+      <button type="button" onclick="closeDispatchModal()" class="btn btn-outline">Cancel</button>
+      <button type="button" onclick="submitDispatch()" class="btn btn-primary" id="modalSubmitDispatchBtn">Confirm Dispatch</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let globalInventoryData = null;
+let activeModalBatch = null;
+
+async function loadPredictiveInventory() {
+  try {
+    const res = await fetch("/api/officer/predictive-inventory");
+    const data = await res.json();
+
+    if (!data.success) {
+      const tbody = document.getElementById("officerBatchesBody");
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 2rem; color: #ef4444;">Error loading inventory: ${data.error || "Unknown"}</td></tr>`;
+      }
+      return;
+    }
+
+    globalInventoryData = data;
+    renderTopKPIs(data);
+    renderRecommendations(data.recommendations || {});
+    renderCategoryTable(data.category_breakdown || []);
+    renderBatchesTable(data.inventory_items || data.batches || []);
+
+  } catch (err) {
+    console.error("Failed to fetch predictive inventory:", err);
+    const tbody = document.getElementById("officerBatchesBody");
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 2rem; color: #ef4444;">Failed to load inventory data. Please refresh the page.</td></tr>`;
+    }
+  }
+}
+
+function renderTopKPIs(data) {
+  const inv = data.inventory_summary || {};
+  const demand = data.demand_forecast || {};
+  const risk = data.stock_risk || {};
+
+  // Stock
+  const totalKg = inv.total_stock_kg || 0;
+  const elTotalStock = document.getElementById("kpiTotalStock");
+  if (elTotalStock) elTotalStock.textContent = totalKg > 0 ? `${totalKg.toLocaleString('en-IN')} kg` : "0 kg";
+  const elTotalStockQ = document.getElementById("kpiTotalStockQ");
+  if (elTotalStockQ) elTotalStockQ.textContent = `${inv.total_stock_quintals || 0} quintals across ${inv.total_batches || 0} lots`;
+
+  // Demand
+  const elDemand7d = document.getElementById("kpiDemand7d");
+  if (elDemand7d) elDemand7d.textContent = `${(demand.forecast_7d_kg || 0).toLocaleString('en-IN')} kg`;
+  const elDailyRate = document.getElementById("kpiDailyRate");
+  if (elDailyRate) elDailyRate.textContent = `Avg ${(demand.daily_demand_kg || 0).toLocaleString('en-IN')} kg / day`;
+
+  const elDemand14d = document.getElementById("kpiDemand14d");
+  if (elDemand14d) elDemand14d.textContent = `${(demand.forecast_14d_kg || 0).toLocaleString('en-IN')} kg`;
+  const elReliability = document.getElementById("kpiReliability");
+  if (elReliability) elReliability.textContent = `Reliability: ${demand.reliability || 'Low'}`;
+
+  // Days Remaining
+  const daysRem = risk.days_remaining;
+  const elDaysRemaining = document.getElementById("kpiDaysRemaining");
+  if (elDaysRemaining) elDaysRemaining.textContent = daysRem !== null && daysRem !== undefined ? `${daysRem} days` : (risk.days_remaining_str || "N/A");
+  const elStockoutDate = document.getElementById("kpiStockoutDate");
+  if (elStockoutDate) elStockoutDate.textContent = risk.estimated_stockout_date ? `Est Stock-out: ${risk.estimated_stockout_date}` : "Est Stock-out: Pending Demand";
+
+  // Risk Color Indicator
+  const color = risk.status_color || "GREEN";
+  const riskCard = document.getElementById("kpiStockRiskCard");
+  const riskIcon = document.getElementById("kpiRiskIcon");
+  if (riskCard) {
+    if (color === "RED") {
+      riskCard.style.borderLeft = "4px solid #ef4444";
+      if (riskIcon) riskIcon.textContent = "🔴";
+    } else if (color === "ORANGE") {
+      riskCard.style.borderLeft = "4px solid #f97316";
+      if (riskIcon) riskIcon.textContent = "🟠";
+    } else if (color === "YELLOW") {
+      riskCard.style.borderLeft = "4px solid #eab308";
+      if (riskIcon) riskIcon.textContent = "🟡";
+    } else {
+      riskCard.style.borderLeft = "4px solid #22c55e";
+      if (riskIcon) riskIcon.textContent = "🟢";
+    }
+  }
+
+  // Storage Warnings count
+  const elStorageWarn = document.getElementById("kpiStorageWarnings");
+  if (elStorageWarn) elStorageWarn.textContent = inv.storage_risk_batches || 0;
+
+  // Stock Status
+  const elStockStatus = document.getElementById("kpiStockStatus");
+  if (elStockStatus) elStockStatus.textContent = risk.status_label || "Healthy Stock";
+  const elStockStatusSub = document.getElementById("kpiStockStatusSub");
+  if (elStockStatusSub) elStockStatusSub.textContent = risk.explanation ? risk.explanation.substring(0, 40) + "..." : "Status verified";
+}
+
+function renderRecommendations(recs) {
+  const sell = recs.sell_first || {};
+  const retain = recs.retain || {};
+
+  const elSellCat = document.getElementById("sellCategory");
+  if (elSellCat) elSellCat.textContent = sell.category || "None";
+  const elSellQty = document.getElementById("sellQuantity");
+  if (elSellQty) elSellQty.textContent = sell.recommended_quantity_kg ? `${Number(sell.recommended_quantity_kg).toLocaleString('en-IN')} kg` : "0 kg";
+  const elSellReason = document.getElementById("sellReason");
+  if (elSellReason) elSellReason.textContent = sell.reason || "No immediate liquidation required.";
+
+  const elRetainCat = document.getElementById("retainCategory");
+  if (elRetainCat) elRetainCat.textContent = retain.category || "Grade A";
+  const elRetainQty = document.getElementById("retainQuantity");
+  if (elRetainQty) elRetainQty.textContent = retain.recommended_quantity_kg ? `${Number(retain.recommended_quantity_kg).toLocaleString('en-IN')} kg` : "0 kg";
+  const elRetainReason = document.getElementById("retainReason");
+  if (elRetainReason) elRetainReason.textContent = retain.reason || "Inventory is within safe storage planning windows.";
+  const elRetainWindow = document.getElementById("retainWindow");
+  if (elRetainWindow) elRetainWindow.textContent = retain.remaining_window || "50–75 days";
+}
+
+function renderCategoryTable(categories) {
+  const tbody = document.getElementById("categoryTableBody");
+  if (!tbody) return;
+  if (!categories || categories.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 2rem; color: var(--text-muted);">No category records found.</td></tr>`;
+    return;
+  }
+
+  const badgeMap = {
+    GREEN: '<span class="badge badge-success">🟢 Healthy</span>',
+    YELLOW: '<span class="badge badge-warning">🟡 Low Stock</span>',
+    ORANGE: '<span class="badge" style="background: #fed7aa; color: #9a3412;">🟠 Critical</span>',
+    RED: '<span class="badge badge-grade-rej">🔴 Stock-Out Risk</span>'
+  };
+
+  tbody.innerHTML = categories.map(c => {
+    const statusCol = (c.storage_status_color || 'green').toLowerCase();
+    return `
+      <tr>
+        <td><b>${c.category || ''}</b></td>
+        <td><b>${Number(c.current_stock_kg || 0).toLocaleString('en-IN')} kg</b><br><small style="color: var(--text-muted);">${c.current_stock_quintals || 0} Q</small></td>
+        <td>7d: ${Number(c.forecast_7d_kg || 0).toLocaleString('en-IN')} kg<br><small style="color: var(--text-muted);">14d: ${Number(c.forecast_14d_kg || 0).toLocaleString('en-IN')} kg</small></td>
+        <td><b>${c.days_remaining || '--'}</b></td>
+        <td>${c.storage_age_avg_days || 0} days</td>
+        <td><span class="badge badge-${statusCol}">${c.storage_status_color || 'GREEN'}</span></td>
+        <td>${badgeMap[c.stock_alert_color] || c.stock_alert_color || '🟢 Healthy'}</td>
+        <td><span style="font-size: 0.85rem; font-weight: 600;">${c.recommendation || ''}</span></td>
+        <td><b>${Number(c.recommended_quantity_kg || 0).toLocaleString('en-IN')} kg</b></td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function renderBatchesTable(items) {
+  const tbody = document.getElementById("officerBatchesBody");
+  if (!tbody) return;
+  if (!items || items.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 2rem; color: var(--text-muted);">No inventory batches currently registered.</td></tr>`;
+    return;
+  }
+
+  const colorBadgeMap = {
+    GREEN: '<span class="badge badge-success">🟢 Normal</span>',
+    YELLOW: '<span class="badge badge-warning">🟡 Approaching</span>',
+    ORANGE: '<span class="badge" style="background: #fed7aa; color: #9a3412; font-weight: 700;">🟠 Near Limit</span>',
+    RED: '<span class="badge badge-grade-rej">🔴 Attention</span>'
+  };
+
+  tbody.innerHTML = items.map(it => {
+    const st = it.storage_analysis || it.grade_a_status || it.urs_status || {};
+    const statusColor = (st.status_color || (it.is_at_risk ? 'RED' : 'GREEN')).toUpperCase();
+    const statusBadge = colorBadgeMap[statusColor] || `<span class="badge">${st.status_label || 'Normal'}</span>`;
+    const qty = it.current_balance_kg !== undefined ? it.current_balance_kg : (it.quantity_kg || 0);
+    const qtyDisplay = qty > 0 ? 
+      `<b>${Number(qty).toLocaleString('en-IN')} kg</b>` : 
+      `<span style="color: #ea580c; font-weight: 600; font-size: 0.82rem;">⚠️ Qty Required</span>`;
+
+    const category = it.primary_category || (it.grade_a_kg >= it.urs_kg ? 'Grade A' : 'URS');
+    const isGradeA = typeof category === 'string' && category.includes('Grade A');
+    const isURS = typeof category === 'string' && category.includes('URS');
+    const catBadgeClass = isGradeA ? 'badge-grade-a' : (isURS ? 'badge-grade-urs' : 'badge-grade-rej');
+
+    const storedDate = it.stored_date || it.storage_start_date || it.evaluation_date || 'N/A';
+    const ageDays = st.storage_age_days !== undefined ? st.storage_age_days : (it.storage_age_days || 0);
+    const riskWindow = st.estimated_risk_window || '--';
+    const farmerDisplay = it.farmer_name || 'Farmer';
+    const farmerIdDisplay = it.farmer_id ? `<br><small style="color: var(--text-muted);">${it.farmer_id}</small>` : '';
+
+    return `
+      <tr>
+        <td><b>${it.batch_id || 'N/A'}</b></td>
+        <td>${farmerDisplay}${farmerIdDisplay}</td>
+        <td>${storedDate}</td>
+        <td><span class="badge ${catBadgeClass}">${category}</span></td>
+        <td>${qtyDisplay}</td>
+        <td><b>${ageDays} days</b></td>
+        <td>${statusBadge}</td>
+        <td><span style="font-size: 0.82rem; color: #475569;">${riskWindow}</span></td>
+        <td style="text-align: right; white-space: nowrap;">
+          <button onclick="openQtyModal('${it.batch_id}', ${qty || 0})" class="btn btn-sm btn-outline" title="Update verified physical weight">
+            ⚖️ Qty
+          </button>
+          <button onclick="openDispatchModal('${it.batch_id}', ${qty || 0})" class="btn btn-sm btn-primary" title="Record outbound sale or dispatch" ${qty <= 0 ? 'disabled' : ''}>
+            📤 Dispatch
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function filterBatchesTable() {
+  const query = document.getElementById("batchSearchInput").value.toLowerCase();
+  const rows = document.querySelectorAll("#officerBatchesBody tr");
+  rows.forEach(r => {
+    const text = r.textContent.toLowerCase();
+    r.style.display = text.includes(query) ? "" : "none";
+  });
+}
+
+// Modal Handlers
+function openQtyModal(batchId, currentKg) {
+  activeModalBatch = batchId;
+  document.getElementById("modalBatchId").textContent = batchId;
+  document.getElementById("modalQtyInput").value = currentKg > 0 ? currentKg : "";
+  document.getElementById("modalQtyUnit").value = "kg";
+  document.getElementById("updateQtyModal").style.display = "flex";
+}
+
+function closeQtyModal() {
+  document.getElementById("updateQtyModal").style.display = "none";
+}
+
+async function submitQtyUpdate() {
+  const val = parseFloat(document.getElementById("modalQtyInput").value);
+  const unit = document.getElementById("modalQtyUnit").value;
+
+  if (isNaN(val) || val < 0) {
+    alert("Please enter a valid positive quantity.");
+    return;
+  }
+
+  const btn = document.getElementById("modalSaveQtyBtn");
+  btn.disabled = true;
+  btn.textContent = "Updating...";
+
+  try {
+    const res = await fetch("/api/officer/inventory/update-quantity", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ batch_id: activeModalBatch, quantity: val, unit: unit })
+    });
+    const result = await res.json();
+    if (result.success) {
+      closeQtyModal();
+      loadPredictiveInventory();
+    } else {
+      alert("Error: " + (result.error || "Update failed"));
+    }
+  } catch (err) {
+    alert("Request failed: " + err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Save Quantity";
+  }
+}
+
+function openDispatchModal(batchId, currentKg) {
+  activeModalBatch = batchId;
+  document.getElementById("dispatchBatchId").textContent = batchId;
+  document.getElementById("dispatchAvailableKg").textContent = Number(currentKg).toLocaleString('en-IN');
+  document.getElementById("dispatchQtyInput").value = "";
+  document.getElementById("dispatchQtyInput").max = currentKg;
+  document.getElementById("dispatchModal").style.display = "flex";
+}
+
+function openQuickDispatchModal(type) {
+  if (!globalInventoryData || !globalInventoryData.inventory_items || globalInventoryData.inventory_items.length === 0) {
+    alert("No active inventory batches available for dispatch.");
+    return;
+  }
+  // Find first suitable batch
+  const items = globalInventoryData.inventory_items.filter(i => i.current_balance_kg > 0);
+  if (items.length === 0) {
+    alert("Please record physical quantities on inventory batches before dispatching.");
+    return;
+  }
+  openDispatchModal(items[0].batch_id, items[0].current_balance_kg);
+}
+
+function closeDispatchModal() {
+  document.getElementById("dispatchModal").style.display = "none";
+}
+
+async function submitDispatch() {
+  const qty = parseFloat(document.getElementById("dispatchQtyInput").value);
+  const dest = document.getElementById("dispatchDestination").value.trim();
+  const reason = document.getElementById("dispatchReason").value.trim();
+
+  if (isNaN(qty) || qty <= 0) {
+    alert("Please enter a valid positive quantity to dispatch.");
+    return;
+  }
+
+  const btn = document.getElementById("modalSubmitDispatchBtn");
+  btn.disabled = true;
+  btn.textContent = "Processing...";
+
+  try {
+    const res = await fetch("/api/officer/inventory/dispatch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        batch_id: activeModalBatch,
+        quantity_kg: qty,
+        destination: dest || "Local APMC Market",
+        reason: reason || "Outbound sale"
+      })
+    });
+    const result = await res.json();
+    if (result.success) {
+      closeDispatchModal();
+      loadPredictiveInventory();
+    } else {
+      alert("Error: " + (result.error || "Dispatch failed"));
+    }
+  } catch (err) {
+    alert("Request failed: " + err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Confirm Dispatch";
+  }
+}
+
+document.addEventListener("DOMContentLoaded", loadPredictiveInventory);
+</script>
+{% endblock %}

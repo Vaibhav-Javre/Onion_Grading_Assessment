@@ -4,29 +4,70 @@
 {% block page_title %}Evaluation Certificate: {{ evaluation.report_id or evaluation.id }}{% endblock %}
 
 {% block content %}
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+<div
+  style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
   <div>
-    <a href="{{ url_for('views.officer_reports') }}" style="font-size: 0.85rem; color: var(--text-muted); display: inline-flex; align-items: center; gap: 0.25rem; margin-bottom: 0.5rem;">
+    <a href="{{ url_for('views.officer_reports') }}"
+      style="font-size: 0.85rem; color: var(--text-muted); display: inline-flex; align-items: center; gap: 0.25rem; margin-bottom: 0.5rem;">
       ← Back to Report History
     </a>
     <h1 style="font-size: 1.75rem; color: var(--primary-dark); margin: 0;">
       Official Report: <span style="color: var(--primary-green);">{{ evaluation.report_id or evaluation.id }}</span>
     </h1>
-    <span class="badge badge-success" style="margin-top: 0.35rem;">Status: Confirmed & Digitally Certified</span>
+    <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.4rem; flex-wrap: wrap;">
+      <span class="badge badge-success">Status: Confirmed & Digitally Certified</span>
+      {% set rep_lang = evaluation.report_language or 'en' %}
+      {% if rep_lang == 'mr' %}
+        <span class="badge" style="background: #fef2f2; color: #b91c1c; border: 1.5px solid #fecaca; font-weight: 700; padding: 0.35rem 0.65rem;">🚩 अहवाल भाषा: मराठी (Report Language: Marathi)</span>
+      {% elif rep_lang == 'hi' %}
+        <span class="badge" style="background: #fffbeb; color: #b45309; border: 1.5px solid #fde68a; font-weight: 700; padding: 0.35rem 0.65rem;">🇮🇳 रिपोर्ट भाषा: हिंदी (Report Language: Hindi)</span>
+      {% else %}
+        <span class="badge" style="background: #f0fdf4; color: #166534; border: 1.5px solid #bbf7d0; font-weight: 700; padding: 0.35rem 0.65rem;">🇬🇧 Report Language: English</span>
+      {% endif %}
+    </div>
   </div>
 
-  <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-    <a href="/reports/download/Onion_Report_{{ evaluation.report_id or evaluation.id }}.pdf?inline=1" target="_blank" class="btn btn-outline btn-lg">
+  <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+    <a id="officerPdfViewBtn" href="/reports/download/Onion_Report_{{ evaluation.report_id or evaluation.id }}.pdf?inline=1&lang={{ evaluation.report_language or 'en' }}" target="_blank"
+      class="btn btn-outline btn-lg">
       👁️ View PDF in Browser
     </a>
-    <a href="/reports/download/Onion_Report_{{ evaluation.report_id or evaluation.id }}.pdf" download="Onion_Report_{{ evaluation.report_id or evaluation.id }}.pdf" class="btn btn-primary btn-lg" style="box-shadow: var(--shadow-md);">
+    <a id="officerPdfDownloadBtn" href="/reports/download/Onion_Report_{{ evaluation.report_id or evaluation.id }}.pdf?lang={{ evaluation.report_language or 'en' }}"
+      download="Onion_Report_{{ evaluation.report_id or evaluation.id }}.pdf" class="btn btn-primary btn-lg"
+      style="box-shadow: var(--shadow-md);">
       📥 Download Certified PDF Report (.pdf)
     </a>
   </div>
 </div>
 
+<!-- Language Selection / Switcher Bar -->
+<div class="card" style="margin-bottom: 1.5rem; border: 1px solid #cbd5e1; background: #f8fafc; padding: 0.75rem 1.25rem;">
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+      <span style="font-size: 1.15rem;">🌐</span>
+      <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-dark);">
+        Report Language Options / अहवाल भाषा पर्याय / रिपोर्ट भाषा विकल्प:
+      </span>
+      <span style="font-size: 0.8rem; color: var(--text-muted);">(Generated in <b>{{ 'Marathi (मराठी)' if rep_lang == 'mr' else ('Hindi (हिंदी)' if rep_lang == 'hi' else 'English') }}</b>)</span>
+    </div>
+
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <button type="button" id="langBtnEn" onclick="switchReportLanguage('en')" class="btn btn-sm {{ 'btn-primary' if rep_lang == 'en' else 'btn-outline' }}" style="padding: 0.3rem 0.8rem; font-size: 0.8rem;">
+        🇬🇧 English
+      </button>
+      <button type="button" id="langBtnHi" onclick="switchReportLanguage('hi')" class="btn btn-sm {{ 'btn-primary' if rep_lang == 'hi' else 'btn-outline' }}" style="padding: 0.3rem 0.8rem; font-size: 0.8rem;">
+        🇮🇳 हिंदी (Hindi)
+      </button>
+      <button type="button" id="langBtnMr" onclick="switchReportLanguage('mr')" class="btn btn-sm {{ 'btn-primary' if rep_lang == 'mr' else 'btn-outline' }}" style="padding: 0.3rem 0.8rem; font-size: 0.8rem;">
+        🚩 मराठी (Marathi)
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- Info Cards Grid -->
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem; margin-bottom: 1.5rem;">
+<div
+  style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem; margin-bottom: 1.5rem;">
   <!-- Farmer Information -->
   <div class="card" style="margin-bottom: 0;">
     <div class="card-header">
@@ -99,7 +140,8 @@
     <div class="stat-info">
       <span class="stat-label">Grade A (Healthy)</span>
       <span class="stat-value" style="color: var(--grade-a);">{{ evaluation.grade_a_count }}</span>
-      <span class="stat-sub">{{ (evaluation.grade_a_count / (evaluation.total_onions or 1) * 100) | round(1) }}% of batch</span>
+      <span class="stat-sub">{{ (evaluation.grade_a_count / (evaluation.total_onions or 1) * 100) | round(1) }}% of
+        batch</span>
     </div>
     <div class="stat-icon green">✓</div>
   </div>
@@ -108,7 +150,8 @@
     <div class="stat-info">
       <span class="stat-label">URS Standard (Damaged)</span>
       <span class="stat-value" style="color: var(--grade-urs);">{{ evaluation.urs_count }}</span>
-      <span class="stat-sub">{{ (evaluation.urs_count / (evaluation.total_onions or 1) * 100) | round(1) }}% of batch</span>
+      <span class="stat-sub">{{ (evaluation.urs_count / (evaluation.total_onions or 1) * 100) | round(1) }}% of
+        batch</span>
     </div>
     <div class="stat-icon amber">⚠️</div>
   </div>
@@ -117,35 +160,43 @@
     <div class="stat-info">
       <span class="stat-label">Rejected (Rotten+Sprouted)</span>
       <span class="stat-value" style="color: var(--grade-rej);">{{ evaluation.rejected_count }}</span>
-      <span class="stat-sub">{{ (evaluation.rejected_count / (evaluation.total_onions or 1) * 100) | round(1) }}% of batch</span>
+      <span class="stat-sub">{{ (evaluation.rejected_count / (evaluation.total_onions or 1) * 100) | round(1) }}% of
+        batch</span>
     </div>
     <div class="stat-icon red">✕</div>
   </div>
 </div>
 
 <!-- Government Mandi Price Estimation & Farmer Payout Card -->
-<div class="card" style="margin-bottom: 1.5rem; border: 1.5px solid #a7f3d0; background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%);">
-  <div class="card-header" style="background: #ecfdf5; border-bottom: 1px solid #d1fae5; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+<div class="card"
+  style="margin-bottom: 1.5rem; border: 1.5px solid #a7f3d0; background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%);">
+  <div class="card-header"
+    style="background: #ecfdf5; border-bottom: 1px solid #d1fae5; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.5rem;">
       <span style="font-size: 1.25rem;">💰</span>
       <div>
-        <h3 style="color: var(--primary-dark); font-size: 1.1rem; margin: 0;">Government Mandi Price Estimation & Procurement Payout</h3>
+        <h3 style="color: var(--primary-dark); font-size: 1.1rem; margin: 0;">Government Mandi Price Estimation &
+          Procurement Payout</h3>
         <p style="margin: 0; font-size: 0.8rem; color: #065f46;">
-          Benchmark: <b>{{ evaluation.mandi_name or "Lasalgaon APMC Mandi" }}</b> • Source: <b>{{ evaluation.mandi_api_source or "data.gov.in" }}</b>
+          Benchmark: <b>{{ evaluation.mandi_name or "Lasalgaon APMC Mandi" }}</b> • Source: <b>{{
+            evaluation.mandi_api_source or "data.gov.in" }}</b>
         </p>
       </div>
     </div>
     <div style="display: flex; gap: 0.5rem; align-items: center;">
-      <span class="badge badge-info" style="font-size: 0.8rem;">Date: {{ evaluation.mandi_price_date or (evaluation.evaluation_date.strftime("%d/%m/%Y") if evaluation.evaluation_date else "N/A") }}</span>
+      <span class="badge badge-info" style="font-size: 0.8rem;">Date: {{ evaluation.mandi_price_date or
+        (evaluation.evaluation_date.strftime("%d/%m/%Y") if evaluation.evaluation_date else "N/A") }}</span>
       <button type="button" class="btn btn-sm btn-outline" onclick="toggleQuantityEdit()">✏️ Edit Quantity</button>
     </div>
   </div>
   <div class="card-body">
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; align-items: center;">
-      
+    <div
+      style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; align-items: center;">
+
       <!-- Modal Benchmark -->
       <div style="background: white; border: 1px solid #e5e7eb; border-radius: var(--radius-sm); padding: 0.85rem;">
-        <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Mandi Modal Reference</span>
+        <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Mandi
+          Modal Reference</span>
         <div style="font-size: 1.4rem; font-weight: 800; color: var(--text-dark); margin-top: 0.25rem;">
           {{ "₹{:,.2f}".format(evaluation.mandi_modal_price) if evaluation.mandi_modal_price else "Rate Unavailable" }}
         </div>
@@ -154,7 +205,8 @@
 
       <!-- Quality Score -->
       <div style="background: white; border: 1px solid #e5e7eb; border-radius: var(--radius-sm); padding: 0.85rem;">
-        <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Quality Score</span>
+        <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Quality
+          Score</span>
         <div style="font-size: 1.4rem; font-weight: 800; color: #047857; margin-top: 0.25rem;">
           {{ "{:.1f}%".format(evaluation.quality_score) if evaluation.quality_score is not none else "--%" }}
         </div>
@@ -163,24 +215,31 @@
 
       <!-- Estimated Rate -->
       <div style="background: white; border: 1px solid #e5e7eb; border-radius: var(--radius-sm); padding: 0.85rem;">
-        <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Quality-Adjusted Rate</span>
+        <span
+          style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Quality-Adjusted
+          Rate</span>
         <div style="font-size: 1.4rem; font-weight: 800; color: var(--primary-green); margin-top: 0.25rem;">
-          {{ "₹{:,.2f}".format(evaluation.estimated_price_per_quintal) if evaluation.estimated_price_per_quintal else "--" }}
+          {{ "₹{:,.2f}".format(evaluation.estimated_price_per_quintal) if evaluation.estimated_price_per_quintal else
+          "--" }}
         </div>
         <span style="font-size: 0.75rem; color: var(--text-muted);">per Quintal</span>
       </div>
 
       <!-- Total Farmer Payout -->
-      <div style="background: linear-gradient(135deg, #064e3b 0%, #047857 100%); color: white; border-radius: var(--radius-sm); padding: 0.85rem 1rem;">
-        <span style="font-size: 0.75rem; color: #a7f3d0; font-weight: 700; text-transform: uppercase;">Total Farmer Payout</span>
+      <div
+        style="background: linear-gradient(135deg, #064e3b 0%, #047857 100%); color: white; border-radius: var(--radius-sm); padding: 0.85rem 1rem;">
+        <span style="font-size: 0.75rem; color: #a7f3d0; font-weight: 700; text-transform: uppercase;">Total Farmer
+          Payout</span>
         <div style="font-size: 1.65rem; font-weight: 900; color: white; margin-top: 0.25rem;">
-          {{ "₹{:,.2f}".format(evaluation.total_payout) if (evaluation.total_payout and evaluation.total_payout > 0) else ("Pending Quantity" if evaluation.estimated_price_per_quintal else "N/A") }}
+          {{ "₹{:,.2f}".format(evaluation.total_payout) if (evaluation.total_payout and evaluation.total_payout > 0)
+          else ("Pending Quantity" if evaluation.estimated_price_per_quintal else "N/A") }}
         </div>
         <span style="font-size: 0.75rem; color: #d1fae5;">
           {% if evaluation.quantity_quintals and evaluation.quantity_quintals > 0 %}
-            For {{ "{:.2f}".format(evaluation.quantity_quintals) }} Quintals ({{ "{:,.0f}".format(evaluation.quantity_quintals * 100) }} kg)
+          For {{ "{:.2f}".format(evaluation.quantity_quintals) }} Quintals ({{
+          "{:,.0f}".format(evaluation.quantity_quintals * 100) }} kg)
           {% else %}
-            Batch Quantity Not Specified
+          Batch Quantity Not Specified
           {% endif %}
         </span>
       </div>
@@ -188,13 +247,18 @@
     </div>
 
     <!-- Hidden inline quantity editor -->
-    <div id="quantityEditForm" style="display: none; margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed #a7f3d0;">
-      <form onsubmit="submitQuantityUpdate(event)" style="display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap;">
+    <div id="quantityEditForm"
+      style="display: none; margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed #a7f3d0;">
+      <form onsubmit="submitQuantityUpdate(event)"
+        style="display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap;">
         <div>
-          <label style="font-size: 0.8rem; font-weight: 600; color: var(--primary-dark); display: block; margin-bottom: 0.25rem;">
+          <label
+            style="font-size: 0.8rem; font-weight: 600; color: var(--primary-dark); display: block; margin-bottom: 0.25rem;">
             Procured Quantity (Quintals):
           </label>
-          <input type="number" id="detailQuantityInput" step="0.1" min="0" value="{{ evaluation.quantity_quintals or 0.0 }}" class="form-control" style="width: 180px; font-weight: 700;" required>
+          <input type="number" id="detailQuantityInput" step="0.1" min="0"
+            value="{{ evaluation.quantity_quintals or 0.0 }}" class="form-control"
+            style="width: 180px; font-weight: 700;" required>
         </div>
         <button type="submit" class="btn btn-primary">💾 Save & Recalculate Payout</button>
         <button type="button" class="btn btn-secondary" onclick="toggleQuantityEdit()">Cancel</button>
@@ -206,7 +270,8 @@
 <!-- Visual Results: Annotated Image & Donut Chart -->
 <div class="results-grid" style="margin-bottom: 1.5rem;">
   <div class="card">
-    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+    <div class="card-header"
+      style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
       <h3>AI Annotated Image & Bounding Boxes</h3>
       {% if evaluation.total_images and evaluation.total_images > 1 %}
       <span class="badge badge-info">{{ evaluation.total_images }} Angles Analyzed</span>
@@ -215,11 +280,13 @@
     <div class="card-body" style="padding: 1rem;">
       {% if evaluation.images and evaluation.images|length > 1 %}
       <div class="angle-tabs-bar" style="margin-bottom: 0.75rem;">
-        <button type="button" class="angle-tab-btn active" onclick="switchReportImage(this, '/outputs/{{ evaluation.annotated_image_path | basename }}')">
+        <button type="button" class="angle-tab-btn active"
+          onclick="switchReportImage(this, '/outputs/{{ evaluation.annotated_image_path | basename }}')">
           🖼️ Overview Collage ({{ evaluation.total_images }} Angles)
         </button>
         {% for img in evaluation.images %}
-        <button type="button" class="angle-tab-btn" onclick="switchReportImage(this, '/outputs/{{ img.annotated_image_path | basename }}')">
+        <button type="button" class="angle-tab-btn"
+          onclick="switchReportImage(this, '/outputs/{{ img.annotated_image_path | basename }}')">
           Angle #{{ img.image_order }} ({{ img.total_onions }} bulbs)
         </button>
         {% endfor %}
@@ -227,9 +294,12 @@
       {% endif %}
 
       <div class="annotated-viewer">
-        <img id="officerReportAnnotatedImg" src="/outputs/{{ evaluation.annotated_image_path | basename if evaluation.annotated_image_path else '' }}" alt="AI Annotated Onion Image">
+        <img id="officerReportAnnotatedImg"
+          src="/outputs/{{ evaluation.annotated_image_path | basename if evaluation.annotated_image_path else '' }}"
+          alt="AI Annotated Onion Image">
       </div>
-      <div style="margin-top: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center; font-size: 0.8rem;">
+      <div
+        style="margin-top: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center; font-size: 0.8rem;">
         <span style="color: var(--grade-a); font-weight: 600;">■ Healthy (Grade A)</span>
         <span style="color: var(--grade-urs); font-weight: 600;">■ Damaged (URS)</span>
         <span style="color: var(--grade-rej); font-weight: 600;">■ Rotten (Rejected)</span>
@@ -249,19 +319,23 @@
 
       <div class="quality-stat-row healthy">
         <div><b>Healthy</b></div>
-        <div>{{ evaluation.healthy_count }} bulbs • {{ (evaluation.healthy_count / (evaluation.total_onions or 1) * 100) | round(1) }}%</div>
+        <div>{{ evaluation.healthy_count }} bulbs • {{ (evaluation.healthy_count / (evaluation.total_onions or 1) * 100)
+          | round(1) }}%</div>
       </div>
       <div class="quality-stat-row damaged">
         <div><b>Damaged</b></div>
-        <div>{{ evaluation.damaged_count }} bulbs • {{ (evaluation.damaged_count / (evaluation.total_onions or 1) * 100) | round(1) }}%</div>
+        <div>{{ evaluation.damaged_count }} bulbs • {{ (evaluation.damaged_count / (evaluation.total_onions or 1) * 100)
+          | round(1) }}%</div>
       </div>
       <div class="quality-stat-row rotten">
         <div><b>Rotten</b></div>
-        <div>{{ evaluation.rotten_count }} bulbs • {{ (evaluation.rotten_count / (evaluation.total_onions or 1) * 100) | round(1) }}%</div>
+        <div>{{ evaluation.rotten_count }} bulbs • {{ (evaluation.rotten_count / (evaluation.total_onions or 1) * 100) |
+          round(1) }}%</div>
       </div>
       <div class="quality-stat-row sprouted">
         <div><b>Sprouted</b></div>
-        <div>{{ evaluation.sprouted_count }} bulbs • {{ (evaluation.sprouted_count / (evaluation.total_onions or 1) * 100) | round(1) }}%</div>
+        <div>{{ evaluation.sprouted_count }} bulbs • {{ (evaluation.sprouted_count / (evaluation.total_onions or 1) *
+          100) | round(1) }}%</div>
       </div>
     </div>
   </div>
@@ -273,6 +347,18 @@
     <h3>Official Quality Assessment Summary</h3>
   </div>
   <div class="card-body">
+    {% if evaluation.quality_summary and ('crowded' in evaluation.quality_summary.lower() or 'overlapping' in
+    evaluation.quality_summary.lower()) %}
+    <div
+      style="background: #fffbeb; border: 1.5px solid #fde68a; border-radius: var(--radius-md); padding: 0.85rem 1rem; margin-bottom: 1rem; color: #92400e; display: flex; align-items: flex-start; gap: 0.6rem;">
+      <span style="font-size: 1.3rem; line-height: 1;">⚠️</span>
+      <div>
+        <strong style="color: #b45309; font-size: 0.9rem;">Procurement Advisory:</strong>
+        <span style="font-size: 0.875rem;">Onions were crowded or overlapping in the sample photograph. <b>Spread the
+            onions across the surface for better result</b> and maximum grading accuracy.</span>
+      </div>
+    </div>
+    {% endif %}
     <p style="font-size: 1.05rem; line-height: 1.6; color: var(--text-dark);">
       {{ evaluation.quality_summary }}
     </p>
@@ -283,58 +369,81 @@
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
 <script>
-function switchReportImage(btn, url) {
-  const container = btn.closest('.card-body');
-  if (container) {
-    container.querySelectorAll('.angle-tab-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    const img = container.querySelector('#officerReportAnnotatedImg') || container.querySelector('img');
-    if (img) img.src = url;
+  function switchReportImage(btn, url) {
+    const container = btn.closest('.card-body');
+    if (container) {
+      container.querySelectorAll('.angle-tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const img = container.querySelector('#officerReportAnnotatedImg') || container.querySelector('img');
+      if (img) img.src = url;
+    }
   }
-}
 
-document.addEventListener("DOMContentLoaded", () => {
-  createQualityDonutChart(
-    "officerReportDonutChart",
-    {{ evaluation.healthy_count }},
+  function switchReportLanguage(lang) {
+    const reportCode = "{{ evaluation.report_id or evaluation.id }}";
+    const viewBtn = document.getElementById("officerPdfViewBtn");
+    const downloadBtn = document.getElementById("officerPdfDownloadBtn");
+    
+    if (viewBtn) {
+      viewBtn.href = `/reports/download/Onion_Report_${reportCode}.pdf?inline=1&lang=${lang}`;
+    }
+    if (downloadBtn) {
+      downloadBtn.href = `/reports/download/Onion_Report_${reportCode}.pdf?lang=${lang}`;
+    }
+
+    ['en', 'hi', 'mr'].forEach(l => {
+      const btn = document.getElementById('langBtn' + l.charAt(0).toUpperCase() + l.slice(1));
+      if (btn) {
+        if (l === lang) {
+          btn.className = "btn btn-sm btn-primary";
+        } else {
+          btn.className = "btn btn-sm btn-outline";
+        }
+      }
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    createQualityDonutChart(
+      "officerReportDonutChart",
+      {{ evaluation.healthy_count }},
     {{ evaluation.damaged_count }},
     {{ evaluation.rotten_count }},
     {{ evaluation.sprouted_count }}
   );
 });
 
-function toggleQuantityEdit() {
-  const form = document.getElementById("quantityEditForm");
-  if (form) {
-    form.style.display = form.style.display === "none" ? "block" : "none";
-  }
-}
-
-async function submitQuantityUpdate(e) {
-  e.preventDefault();
-  const input = document.getElementById("detailQuantityInput");
-  const qty = parseFloat(input.value);
-  if (isNaN(qty) || qty < 0) {
-    alert("Please enter a valid quantity in quintals.");
-    return;
-  }
-
-  try {
-    const res = await fetch("/api/officer/evaluate/{{ evaluation.id }}/payout", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ quantity_quintals: qty })
-    });
-    const data = await res.json();
-    if (data.success) {
-      window.location.reload();
-    } else {
-      alert(data.error || "Failed to update quantity.");
+  function toggleQuantityEdit() {
+    const form = document.getElementById("quantityEditForm");
+    if (form) {
+      form.style.display = form.style.display === "none" ? "block" : "none";
     }
-  } catch (err) {
-    alert("Error updating quantity: " + err.message);
   }
-}
+
+  async function submitQuantityUpdate(e) {
+    e.preventDefault();
+    const input = document.getElementById("detailQuantityInput");
+    const qty = parseFloat(input.value);
+    if (isNaN(qty) || qty < 0) {
+      alert("Please enter a valid quantity in quintals.");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/officer/evaluate/{{ evaluation.id }}/payout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quantity_quintals: qty })
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.reload();
+      } else {
+        alert(data.error || "Failed to update quantity.");
+      }
+    } catch (err) {
+      alert("Error updating quantity: " + err.message);
+    }
+  }
 </script>
 {% endblock %}
-

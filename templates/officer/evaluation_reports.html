@@ -1,0 +1,347 @@
+{% extends "base.html" %}
+
+{% block title %}Evaluation Reports - Officer Portal{% endblock %}
+{% block page_title %}Evaluation Reports & Activity Analytics{% endblock %}
+
+{% block content %}
+<!-- Top Header & Export Toolbar -->
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h1 style="font-size: 1.75rem; color: var(--primary-dark);">Field Evaluation Reports</h1>
+    <p style="color: var(--text-muted); font-size: 0.95rem;">
+      Center: <b>{{ officer.procurement_center or 'Lasalgaon APMC Mandi' }}</b> • Activity statistics, grading distributions, and farmer evaluations.
+    </p>
+  </div>
+  <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+    <button onclick="exportOfficerReport('csv')" class="btn btn-sm btn-outline" style="border-color: #cbd5e1;">📥 Export CSV</button>
+    <button onclick="exportOfficerReport('excel')" class="btn btn-sm btn-outline" style="border-color: #cbd5e1;">📊 Export Excel</button>
+    <button onclick="generateOfficerPdf('weekly')" class="btn btn-sm btn-primary">📄 Weekly Summary PDF</button>
+  </div>
+</div>
+
+<!-- Period Filter -->
+<div class="card" style="margin-bottom: 1.75rem; padding: 1.1rem 1.25rem;">
+  <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between;">
+    <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center;">
+      <label style="font-size: 0.85rem; font-weight: 700; color: var(--text-dark); margin: 0;">Period Filter:</label>
+      <select id="officerPeriodSelect" onchange="onOfficerPeriodChange()" class="form-control" style="width: 170px; font-size: 0.85rem; padding: 0.4rem 0.6rem;">
+        <option value="today">Today</option>
+        <option value="this_week">This Week</option>
+        <option value="this_month" selected>This Month</option>
+        <option value="custom">Custom Range</option>
+      </select>
+
+      <div id="officerCustomDateContainer" style="display: none; align-items: center; gap: 0.5rem;">
+        <input type="date" id="officerStartDate" class="form-control" style="width: 140px; font-size: 0.82rem; padding: 0.35rem 0.5rem;">
+        <span style="color: var(--text-muted); font-size: 0.82rem;">to</span>
+        <input type="date" id="officerEndDate" class="form-control" style="width: 140px; font-size: 0.82rem; padding: 0.35rem 0.5rem;">
+        <button onclick="fetchOfficerAnalytics()" class="btn btn-sm btn-primary" style="padding: 0.35rem 0.75rem;">Apply</button>
+      </div>
+    </div>
+
+    <span id="officerActivePeriodLabel" class="badge badge-info" style="font-size: 0.8rem; padding: 0.4rem 0.8rem;">Loading...</span>
+  </div>
+</div>
+
+<!-- Summary Metric Cards -->
+<div class="dashboard-grid" style="margin-bottom: 1.75rem;">
+  <!-- Total Onions Evaluated -->
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Total Onions Evaluated</span>
+      <span id="offTotalOnions" class="stat-value" style="color: var(--primary-dark);">--</span>
+      <span id="offAvgDaily" class="stat-sub">Across confirmed batches</span>
+    </div>
+    <div class="stat-icon blue">🧅</div>
+  </div>
+
+  <!-- Total Sessions -->
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Evaluation Sessions</span>
+      <span id="offTotalSessions" class="stat-value" style="color: #1e3a8a;">--</span>
+      <span id="offAvgPerSession" class="stat-sub">Avg -- / session</span>
+    </div>
+    <div class="stat-icon blue">📋</div>
+  </div>
+
+  <!-- Farmers Evaluated -->
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Farmers Evaluated</span>
+      <span id="offTotalFarmers" class="stat-value" style="color: var(--primary-green);">--</span>
+      <span class="stat-sub">Distinct active farmers</span>
+    </div>
+    <div class="stat-icon green">🧑‍🌾</div>
+  </div>
+
+  <!-- Grade A Count & Pct -->
+  <div class="stat-card grade-a">
+    <div class="stat-info">
+      <span class="stat-label">Grade A (Premium)</span>
+      <span id="offGradeA" class="stat-value" style="color: var(--grade-a);">--</span>
+      <span id="offGradeAPct" class="stat-sub">--% of total</span>
+    </div>
+    <div class="stat-icon green">✓</div>
+  </div>
+
+  <!-- URS Standard -->
+  <div class="stat-card urs">
+    <div class="stat-info">
+      <span class="stat-label">URS Standard</span>
+      <span id="offURS" class="stat-value" style="color: var(--grade-urs);">--</span>
+      <span id="offURSPct" class="stat-sub">--% of total</span>
+    </div>
+    <div class="stat-icon amber">⚠️</div>
+  </div>
+
+  <!-- Rejected -->
+  <div class="stat-card rejected">
+    <div class="stat-info">
+      <span class="stat-label">Rejected Bulbs</span>
+      <span id="offRejected" class="stat-value" style="color: var(--grade-rej);">--</span>
+      <span id="offRejectedPct" class="stat-sub">Rotten + Sprouted</span>
+    </div>
+    <div class="stat-icon red">✕</div>
+  </div>
+</div>
+
+<!-- Charts Grid -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+  <!-- Daily Trend Line Chart -->
+  <div class="card" style="margin-bottom: 0;">
+    <div class="card-header">
+      <h3 style="font-size: 1.05rem;">Daily Evaluation Volume Trend</h3>
+      <span class="badge badge-info">Onions Evaluated</span>
+    </div>
+    <div style="height: 280px; padding: 0.5rem;">
+      <canvas id="offDailyTrendChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Quality Breakdown Bar Chart -->
+  <div class="card" style="margin-bottom: 0;">
+    <div class="card-header">
+      <h3 style="font-size: 1.05rem;">Current Period Quality Distribution</h3>
+      <span class="badge badge-info">AI Four-Class Defect Breakdown</span>
+    </div>
+    <div style="height: 280px; padding: 0.5rem;">
+      <canvas id="offQualityChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- Confirmed Evaluation Sessions Table -->
+<div class="card">
+  <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+    <div>
+      <h3 style="font-size: 1.15rem;">Confirmed Evaluation Batches</h3>
+      <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">Evaluation sessions performed during the selected period.</p>
+    </div>
+    <div>
+      <input type="text" id="offSearchInput" onkeyup="filterOfficerTable()" placeholder="Search Report ID or Farmer..." class="form-control" style="width: 240px; font-size: 0.85rem; padding: 0.4rem 0.6rem;">
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="officerEvalTable">
+      <thead>
+        <tr>
+          <th>Report ID</th>
+          <th>Evaluation Date</th>
+          <th>Farmer Name</th>
+          <th>Total Onions</th>
+          <th>Grade A</th>
+          <th>URS</th>
+          <th>Rejected</th>
+          <th>Overall Grade</th>
+          <th>Est. Payout</th>
+          <th style="text-align: right;">Official PDF</th>
+        </tr>
+      </thead>
+      <tbody id="officerRecordsTbody">
+        <tr>
+          <td colspan="10" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">
+            Loading confirmed evaluation records...
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+let offDailyChart = null;
+let offQualityChart = null;
+
+function onOfficerPeriodChange() {
+  const p = document.getElementById("officerPeriodSelect").value;
+  const c = document.getElementById("officerCustomDateContainer");
+  if (p === "custom") {
+    c.style.display = "flex";
+  } else {
+    c.style.display = "none";
+    fetchOfficerAnalytics();
+  }
+}
+
+async function fetchOfficerAnalytics() {
+  const period = document.getElementById("officerPeriodSelect").value;
+  let url = `/api/evaluation-reports/analytics?period=${encodeURIComponent(period)}`;
+
+  if (period === "custom") {
+    const s = document.getElementById("officerStartDate").value;
+    const e = document.getElementById("officerEndDate").value;
+    if (s) url += `&start_date=${encodeURIComponent(s)}`;
+    if (e) url += `&end_date=${encodeURIComponent(e)}`;
+  }
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (!data.success) {
+      alert("Error: " + (data.error || "Failed to load reports"));
+      return;
+    }
+
+    document.getElementById("officerActivePeriodLabel").textContent = data.period_label || period;
+
+    const sum = data.summary_cards || {};
+    document.getElementById("offTotalOnions").textContent = Number(sum.total_onions_evaluated || 0).toLocaleString("en-IN");
+    document.getElementById("offTotalSessions").textContent = Number(sum.total_evaluations || 0).toLocaleString("en-IN");
+    document.getElementById("offAvgPerSession").textContent = `Avg ${sum.avg_onions_per_evaluation || 0} / session`;
+    document.getElementById("offTotalFarmers").textContent = sum.total_farmers_evaluated || 0;
+
+    document.getElementById("offGradeA").textContent = Number(sum.grade_a_count || 0).toLocaleString("en-IN");
+    document.getElementById("offGradeAPct").textContent = `${sum.grade_a_pct || 0}% of evaluated`;
+
+    document.getElementById("offURS").textContent = Number(sum.urs_count || 0).toLocaleString("en-IN");
+    document.getElementById("offURSPct").textContent = `${sum.urs_pct || 0}% of evaluated`;
+
+    document.getElementById("offRejected").textContent = Number(sum.rejected_count || 0).toLocaleString("en-IN");
+    document.getElementById("offRejectedPct").textContent = `${sum.rejected_pct || 0}% of evaluated`;
+
+    renderOfficerCharts(data);
+    renderOfficerTableRecords(data.records || []);
+
+  } catch (err) {
+    console.error("Failed to load officer analytics:", err);
+  }
+}
+
+function renderOfficerCharts(data) {
+  const dt = data.daily_trend || {};
+  const qd = data.quality_distribution || {};
+
+  // Daily Trend Chart
+  const ctxDaily = document.getElementById("offDailyTrendChart");
+  if (ctxDaily) {
+    if (offDailyChart) offDailyChart.destroy();
+    offDailyChart = new Chart(ctxDaily, {
+      type: "line",
+      data: {
+        labels: dt.labels || [],
+        datasets: [{
+          label: "Onions Evaluated",
+          data: dt.onions || [],
+          borderColor: "#0f5132",
+          backgroundColor: "rgba(15, 81, 50, 0.08)",
+          fill: true,
+          tension: 0.3,
+          pointRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+      }
+    });
+  }
+
+  // Quality Chart
+  const ctxQ = document.getElementById("offQualityChart");
+  if (ctxQ) {
+    if (offQualityChart) offQualityChart.destroy();
+    offQualityChart = new Chart(ctxQ, {
+      type: "bar",
+      data: {
+        labels: ["Healthy", "Damaged", "Rotten", "Sprouted"],
+        datasets: [{
+          label: "Count",
+          data: [
+            qd.healthy ? qd.healthy.count : 0,
+            qd.damaged ? qd.damaged.count : 0,
+            qd.rotten ? qd.rotten.count : 0,
+            qd.sprouted ? qd.sprouted.count : 0
+          ],
+          backgroundColor: ["#16a34a", "#d97706", "#dc2626", "#ea580c"],
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+      }
+    });
+  }
+}
+
+function renderOfficerTableRecords(records) {
+  const tbody = document.getElementById("officerRecordsTbody");
+  if (!records || records.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; padding: 2rem; color: var(--text-muted);">No evaluation sessions recorded in this period.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = records.map(r => `
+    <tr>
+      <td><b>${r.report_id}</b></td>
+      <td>${r.evaluation_date}</td>
+      <td><b>${r.farmer_name}</b><br><small style="color: var(--text-muted);">${r.farmer_id}</small></td>
+      <td><b>${r.total_onions}</b></td>
+      <td><span class="badge badge-grade-a">${r.grade_a_count}</span></td>
+      <td><span class="badge badge-grade-urs">${r.urs_count}</span></td>
+      <td><span class="badge badge-grade-rej">${r.rejected_count}</span></td>
+      <td><span class="badge ${r.overall_result.includes('Grade A') ? 'badge-success' : 'badge-warning'}">${r.overall_result}</span></td>
+      <td>₹${Number(r.total_payout || 0).toLocaleString("en-IN")}</td>
+      <td style="text-align: right;">
+        <a href="${r.pdf_url}" target="_blank" class="btn btn-sm btn-outline">📄 PDF</a>
+      </td>
+    </tr>
+  `).join("");
+}
+
+function filterOfficerTable() {
+  const q = document.getElementById("offSearchInput").value.toLowerCase();
+  const rows = document.querySelectorAll("#officerRecordsTbody tr");
+  rows.forEach(r => {
+    const text = r.textContent.toLowerCase();
+    r.style.display = text.includes(q) ? "" : "none";
+  });
+}
+
+function exportOfficerReport(format) {
+  const period = document.getElementById("officerPeriodSelect").value;
+  let url = `/api/evaluation-reports/export/${format}?period=${encodeURIComponent(period)}`;
+  if (period === "custom") {
+    const s = document.getElementById("officerStartDate").value;
+    const e = document.getElementById("officerEndDate").value;
+    if (s) url += `&start_date=${encodeURIComponent(s)}`;
+    if (e) url += `&end_date=${encodeURIComponent(e)}`;
+  }
+  window.open(url, "_blank");
+}
+
+function generateOfficerPdf(type) {
+  window.open(`/api/evaluation-reports/export/${type}-pdf`, "_blank");
+}
+
+document.addEventListener("DOMContentLoaded", fetchOfficerAnalytics);
+</script>
+{% endblock %}

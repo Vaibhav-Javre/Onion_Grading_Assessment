@@ -30,6 +30,14 @@ class OnionClassifier:
                 if in_shape and len(in_shape) > 1 and in_shape[1]:
                     self._input_size = int(in_shape[1])
                 print(f"[OnionClassifier] Keras model loaded successfully! Input size: {self._input_size}x{self._input_size}")
+
+                # Warmup inference once so first live inference has no cold-start latency
+                try:
+                    dummy = np.zeros((1, self._input_size, self._input_size, 3), dtype=np.float32)
+                    _ = self._model(dummy, training=False)
+                    print(f"[OnionClassifier] Keras model warmed up successfully.")
+                except Exception as we:
+                    print(f"[OnionClassifier] Warmup note: {we}")
             except Exception as e:
                 print(f"[OnionClassifier] Warning: Failed to load Keras model ({e}). Fallback mode active.")
                 self._model = None
@@ -42,9 +50,10 @@ class OnionClassifier:
         resized = cv2.resize(crop_rgb, (self._input_size, self._input_size))
         return resized.astype("float32")
 
-    def classify_batch(self, crops_bgr, conf_threshold=None):
+    def classify_batch(self, crops_bgr, conf_threshold=None, batch_size=32):
         """
-        Classifies a list of onion crop BGR images using batch inference.
+        Classifies a list of onion crop BGR images using safe chunked mini-batch inference.
+        Prevents memory spikes and OOM crashes when processing large multi-image batches.
         Returns: list of tuples: [(class_name: str, confidence: float, all_probabilities: dict), ...]
         """
         if conf_threshold is None:
@@ -57,31 +66,31 @@ class OnionClassifier:
 
         if self._model is not None:
             try:
-                # 3. Preprocess all crops
-                preprocessed = [self.preprocess(crop) for crop in crops_bgr]
-                # 4. Stack them into a NumPy batch
-                batch = np.stack(preprocessed, axis=0)
-
-                # 5. Run TensorFlow/Keras classifier ONCE
-                classifier_model = self._model
-                predictions = classifier_model.predict(
-                    batch,
-                    batch_size=32,
-                    verbose=0
-                )
-
-                # 6. Map predictions to class information
                 results = []
-                for pred in predictions:
-                    class_idx = int(np.argmax(pred))
-                    conf = float(pred[class_idx])
-                    prob_dict = {classes[i]: float(pred[i]) for i in range(len(classes))}
+                total = len(crops_bgr)
+                # Process in safe mini-batches to prevent memory spikes & OOM crashes on large batches
+                for start_i in range(0, total, batch_size):
+                    chunk = crops_bgr[start_i:min(start_i + batch_size, total)]
+                    preprocessed = [self.preprocess(crop) for crop in chunk]
+                    batch = np.stack(preprocessed, axis=0)
 
-                    class_name = classes[class_idx]
-                    if conf < conf_threshold:
-                        class_name = "Uncertain"
+                    preds_tensor = self._model(batch, training=False)
+                    predictions = preds_tensor.numpy() if hasattr(preds_tensor, "numpy") else np.array(preds_tensor)
 
-                    results.append((class_name, conf, prob_dict))
+                    for pred in predictions:
+                        class_idx = int(np.argmax(pred))
+                        conf = float(pred[class_idx])
+                        prob_dict = {classes[i]: float(pred[i]) for i in range(len(classes))}
+
+                        class_name = classes[class_idx]
+                        if conf < conf_threshold:
+                            class_name = "Uncertain"
+
+                        results.append((class_name, conf, prob_dict))
+
+                    del batch
+                    del preprocessed
+                    del preds_tensor
 
                 return results
             except Exception as e:

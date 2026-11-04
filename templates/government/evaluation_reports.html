@@ -1,0 +1,756 @@
+{% extends "base.html" %}
+
+{% block title %}Evaluation Reports & Analytics - Government Portal{% endblock %}
+{% block page_title %}Evaluation Reports & Operational Analytics{% endblock %}
+
+{% block content %}
+<!-- Top Header & Export Toolbar -->
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h1 style="font-size: 1.75rem; color: #0b2545;">Evaluation Reports & Analytics</h1>
+    <p style="color: var(--text-muted); font-size: 0.95rem;">
+      Historical records of OnionGrade AI assessment activity, quality distributions, center velocity, and officer throughput.
+    </p>
+  </div>
+  <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+    <button onclick="exportReport('csv')" class="btn btn-sm btn-outline" style="border-color: #cbd5e1;">📥 Export CSV</button>
+    <button onclick="exportReport('excel')" class="btn btn-sm btn-outline" style="border-color: #cbd5e1;">📊 Export Excel</button>
+    <button onclick="generatePdf('weekly')" class="btn btn-sm btn-outline" style="border-color: #10b981; color: #065f46;">📄 Weekly PDF</button>
+    <button onclick="generatePdf('monthly')" class="btn btn-sm btn-primary">📑 Monthly PDF</button>
+  </div>
+</div>
+
+<!-- Dynamic Period Filter Bar -->
+<div class="card" style="margin-bottom: 1.75rem; padding: 1.1rem 1.25rem;">
+  <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between;">
+    <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center;">
+      <label style="font-size: 0.85rem; font-weight: 700; color: var(--text-dark); margin: 0;">Period Filter:</label>
+      <select id="reportPeriodSelect" onchange="onPeriodChange()" class="form-control" style="width: 170px; font-size: 0.85rem; padding: 0.4rem 0.6rem;">
+        <option value="today">Today</option>
+        <option value="yesterday">Yesterday</option>
+        <option value="this_week">This Week</option>
+        <option value="last_week">Last Week</option>
+        <option value="this_month" selected>This Month</option>
+        <option value="last_month">Last Month</option>
+        <option value="this_year">This Year</option>
+        <option value="custom">Custom Date Range</option>
+      </select>
+
+      <div id="customDateContainer" style="display: none; align-items: center; gap: 0.5rem;">
+        <input type="date" id="customStartDate" class="form-control" style="width: 140px; font-size: 0.82rem; padding: 0.35rem 0.5rem;">
+        <span style="color: var(--text-muted); font-size: 0.82rem;">to</span>
+        <input type="date" id="customEndDate" class="form-control" style="width: 140px; font-size: 0.82rem; padding: 0.35rem 0.5rem;">
+        <button onclick="fetchEvaluationAnalytics()" class="btn btn-sm btn-primary" style="padding: 0.35rem 0.75rem;">Apply</button>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <span id="activePeriodLabel" class="badge badge-info" style="font-size: 0.8rem; padding: 0.4rem 0.8rem;">Loading Period...</span>
+      <button onclick="fetchEvaluationAnalytics()" class="btn btn-sm btn-outline" title="Refresh">🔄</button>
+    </div>
+  </div>
+</div>
+
+<!-- 8 Summary Metric Cards (Top Section) -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem; margin-bottom: 1.75rem;">
+  <!-- Total Onions Evaluated -->
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Total Onions Evaluated</span>
+      <span id="statTotalOnions" class="stat-value" style="color: #0b2545;">--</span>
+      <span id="statAvgOnionsDaily" class="stat-sub">Avg -- / active day</span>
+    </div>
+    <div class="stat-icon blue">🧅</div>
+  </div>
+
+  <!-- Total Evaluation Sessions -->
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Evaluation Sessions</span>
+      <span id="statTotalEvals" class="stat-value" style="color: #1e3a8a;">--</span>
+      <span id="statAvgPerSession" class="stat-sub">Avg -- onions / session</span>
+    </div>
+    <div class="stat-icon blue">📋</div>
+  </div>
+
+  <!-- Total Farmers Evaluated -->
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Farmers Evaluated</span>
+      <span id="statTotalFarmers" class="stat-value" style="color: var(--primary-green);">--</span>
+      <span class="stat-sub">Distinct grower profiles</span>
+    </div>
+    <div class="stat-icon green">🧑‍🌾</div>
+  </div>
+
+  <!-- Total Officers Active -->
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Officers Active</span>
+      <span id="statTotalOfficers" class="stat-value" style="color: #0284c7;">--</span>
+      <span class="stat-sub">Field procurement staff</span>
+    </div>
+    <div class="stat-icon blue">👮‍♂️</div>
+  </div>
+
+  <!-- Grade A Count & Pct -->
+  <div class="stat-card grade-a">
+    <div class="stat-info">
+      <span class="stat-label">Grade A (Premium)</span>
+      <span id="statGradeA" class="stat-value" style="color: var(--grade-a);">--</span>
+      <span id="statGradeAPct" class="stat-sub">--% of total evaluated</span>
+    </div>
+    <div class="stat-icon green">✓</div>
+  </div>
+
+  <!-- URS Standard Count & Pct -->
+  <div class="stat-card urs">
+    <div class="stat-info">
+      <span class="stat-label">URS Standard</span>
+      <span id="statURS" class="stat-value" style="color: var(--grade-urs);">--</span>
+      <span id="statURSPct" class="stat-sub">--% of total evaluated</span>
+    </div>
+    <div class="stat-icon amber">⚠️</div>
+  </div>
+
+  <!-- Rejected Count & Pct -->
+  <div class="stat-card rejected">
+    <div class="stat-info">
+      <span class="stat-label">Rejected Bulbs</span>
+      <span id="statRejected" class="stat-value" style="color: var(--grade-rej);">--</span>
+      <span id="statRejectedPct" class="stat-sub">Rotten + Sprouted</span>
+    </div>
+    <div class="stat-icon red">✕</div>
+  </div>
+
+  <!-- Active Evaluation Days -->
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Active Evaluation Days</span>
+      <span id="statActiveDays" class="stat-value" style="color: #475569;">--</span>
+      <span id="statHighestDay" class="stat-sub">Peak: --</span>
+    </div>
+    <div class="stat-icon blue">📅</div>
+  </div>
+</div>
+
+<!-- Period Comparison Box (Current vs Previous) -->
+<div class="card" style="margin-bottom: 2rem; border-left: 4px solid var(--primary-light);">
+  <div class="card-header" style="background: #f8fafc;">
+    <h3 style="font-size: 1.05rem;">Period Comparison (Current vs Previous Evaluation Period)</h3>
+    <span class="badge badge-info">Comparative Throughput</span>
+  </div>
+  <div style="padding: 1.25rem;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem;">
+      <!-- Total Onions Change -->
+      <div style="background: #f8fafc; padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+        <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Onions Volume</div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 0.25rem;">
+          <b id="cmpOnionsCur" style="font-size: 1.15rem; color: var(--text-dark);">--</b>
+          <span id="cmpOnionsChange" class="badge">--%</span>
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Prev: <span id="cmpOnionsPrev">--</span></div>
+      </div>
+
+      <!-- Evaluations Change -->
+      <div style="background: #f8fafc; padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+        <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Evaluation Sessions</div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 0.25rem;">
+          <b id="cmpEvalsCur" style="font-size: 1.15rem; color: var(--text-dark);">--</b>
+          <span id="cmpEvalsChange" class="badge">--%</span>
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Prev: <span id="cmpEvalsPrev">--</span></div>
+      </div>
+
+      <!-- Farmers Change -->
+      <div style="background: #f8fafc; padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+        <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Farmers Evaluated</div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 0.25rem;">
+          <b id="cmpFarmersCur" style="font-size: 1.15rem; color: var(--text-dark);">--</b>
+          <span id="cmpFarmersChange" class="badge">--%</span>
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Prev: <span id="cmpFarmersPrev">--</span></div>
+      </div>
+
+      <!-- Grade A Change -->
+      <div style="background: #f8fafc; padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+        <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Grade A Onions</div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 0.25rem;">
+          <b id="cmpGradeACur" style="font-size: 1.15rem; color: var(--grade-a);">--</b>
+          <span id="cmpGradeAChange" class="badge">--%</span>
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Prev: <span id="cmpGradeAPrev">--</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Charts Section -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+  <!-- Chart 1: Daily Onion Evaluation Trend (Line Chart) -->
+  <div class="card" style="margin-bottom: 0;">
+    <div class="card-header">
+      <h3 style="font-size: 1.05rem;">Daily Onion Evaluation Trend</h3>
+      <span class="badge badge-info">Actual Daily Volume</span>
+    </div>
+    <div style="height: 290px; padding: 0.5rem;">
+      <canvas id="dailyTrendChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Chart 2: Quality & Defect Distribution (Pie / Bar Chart) -->
+  <div class="card" style="margin-bottom: 0;">
+    <div class="card-header">
+      <h3 style="font-size: 1.05rem;">Quality & Defect Class Distribution</h3>
+      <span class="badge badge-info">Healthy vs Defect Breakdown</span>
+    </div>
+    <div style="height: 290px; padding: 0.5rem;">
+      <canvas id="qualityClassChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Chart 3: Overall Grading Distribution -->
+  <div class="card" style="margin-bottom: 0;">
+    <div class="card-header">
+      <h3 style="font-size: 1.05rem;">Overall Procurement Grading Distribution</h3>
+      <span class="badge badge-info">Grade A vs URS vs Rejected</span>
+    </div>
+    <div style="height: 290px; padding: 0.5rem;">
+      <canvas id="gradePieChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Chart 4: Multi-Period Weekly / Monthly Comparison Trend -->
+  <div class="card" style="margin-bottom: 0;">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+      <h3 style="font-size: 1.05rem;">Historical Comparison Trend</h3>
+      <div style="display: flex; gap: 0.35rem;">
+        <button onclick="setTrendType('weekly')" id="btnTrendWeekly" class="btn btn-sm btn-primary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">Weekly (4W)</button>
+        <button onclick="setTrendType('monthly')" id="btnTrendMonthly" class="btn btn-sm btn-outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">Monthly (6M)</button>
+      </div>
+    </div>
+    <div style="height: 290px; padding: 0.5rem;">
+      <canvas id="comparisonTrendChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- Procurement Center Evaluation Report Table -->
+<div class="card" style="margin-bottom: 2rem;">
+  <div class="card-header">
+    <h3 style="font-size: 1.15rem;">Procurement Center Evaluation Report</h3>
+    <span class="badge badge-info">Center Throughput & Grade Distribution</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Procurement Center</th>
+          <th>Location</th>
+          <th>Total Evaluations</th>
+          <th>Total Onions</th>
+          <th>Grade A</th>
+          <th>URS</th>
+          <th>Rejected</th>
+          <th>Farmers Evaluated</th>
+          <th>Officers Active</th>
+        </tr>
+      </thead>
+      <tbody id="centerTableBody">
+        <tr>
+          <td colspan="9" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+            Aggregating procurement center evaluation records...
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Officer Evaluation Activity Table -->
+<div class="card" style="margin-bottom: 2rem;">
+  <div class="card-header">
+    <h3 style="font-size: 1.15rem;">Officer Evaluation Activity</h3>
+    <span class="badge badge-info">Operational Activity Statistics</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Officer ID</th>
+          <th>Officer Name</th>
+          <th>Procurement Center</th>
+          <th>Evaluation Sessions</th>
+          <th>Total Onions</th>
+          <th>Farmers Evaluated</th>
+          <th>Grade A</th>
+          <th>URS</th>
+          <th>Rejected</th>
+        </tr>
+      </thead>
+      <tbody id="officerTableBody">
+        <tr>
+          <td colspan="9" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+            Loading officer activity statistics...
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Farmer Evaluation History Table (Searchable) -->
+<div class="card" style="margin-bottom: 2rem;">
+  <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+    <div>
+      <h3 style="font-size: 1.15rem;">Farmer Evaluation History</h3>
+      <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">Cumulative evaluated onion volumes by farmer profile.</p>
+    </div>
+    <div>
+      <input type="text" id="farmerSearchInput" onkeyup="filterFarmerTable()" placeholder="Search farmer ID, name, mobile..." class="form-control" style="width: 250px; font-size: 0.85rem; padding: 0.4rem 0.6rem;">
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="farmerHistoryTable">
+      <thead>
+        <tr>
+          <th>Farmer ID</th>
+          <th>Farmer Name</th>
+          <th>Mobile</th>
+          <th>District</th>
+          <th>Evaluations</th>
+          <th>Total Onions</th>
+          <th>Grade A</th>
+          <th>URS</th>
+          <th>Rejected</th>
+          <th>Last Evaluation</th>
+        </tr>
+      </thead>
+      <tbody id="farmerTableBody">
+        <tr>
+          <td colspan="10" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+            Aggregating farmer evaluation history...
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Detailed Evaluation Records Table with Search & PDF Links -->
+<div class="card">
+  <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+    <div>
+      <h3 style="font-size: 1.15rem;">Confirmed Evaluation Records</h3>
+      <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">Verified evaluation reports conducted during this period.</p>
+    </div>
+    <div>
+      <input type="text" id="recordSearchInput" onkeyup="filterRecordsTable()" placeholder="Search Report ID, Officer, Farmer..." class="form-control" style="width: 250px; font-size: 0.85rem; padding: 0.4rem 0.6rem;">
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="evalRecordsTable">
+      <thead>
+        <tr>
+          <th>Report ID</th>
+          <th>Evaluation Date</th>
+          <th>Farmer</th>
+          <th>Officer / Mandi</th>
+          <th>Total Onions</th>
+          <th>Grade A</th>
+          <th>URS</th>
+          <th>Rejected</th>
+          <th>Final Result</th>
+          <th>Est. Payout</th>
+          <th style="text-align: right;">Official PDF</th>
+        </tr>
+      </thead>
+      <tbody id="recordsTableBody">
+        <tr>
+          <td colspan="11" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">
+            Loading confirmed evaluation records...
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Chart.js Library -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+let dailyTrendChartInstance = null;
+let qualityClassChartInstance = null;
+let gradePieChartInstance = null;
+let comparisonTrendChartInstance = null;
+let currentTrendType = "weekly";
+let globalAnalyticsData = null;
+
+function onPeriodChange() {
+  const p = document.getElementById("reportPeriodSelect").value;
+  const c = document.getElementById("customDateContainer");
+  if (p === "custom") {
+    c.style.display = "flex";
+  } else {
+    c.style.display = "none";
+    fetchEvaluationAnalytics();
+  }
+}
+
+function setTrendType(type) {
+  currentTrendType = type;
+  document.getElementById("btnTrendWeekly").className = type === "weekly" ? "btn btn-sm btn-primary" : "btn btn-sm btn-outline";
+  document.getElementById("btnTrendMonthly").className = type === "monthly" ? "btn btn-sm btn-primary" : "btn btn-sm btn-outline";
+  if (globalAnalyticsData) {
+    renderComparisonTrendChart(globalAnalyticsData);
+  }
+}
+
+async function fetchEvaluationAnalytics() {
+  const period = document.getElementById("reportPeriodSelect").value;
+  let url = `/api/evaluation-reports/analytics?period=${encodeURIComponent(period)}`;
+
+  if (period === "custom") {
+    const s = document.getElementById("customStartDate").value;
+    const e = document.getElementById("customEndDate").value;
+    if (s) url += `&start_date=${encodeURIComponent(s)}`;
+    if (e) url += `&end_date=${encodeURIComponent(e)}`;
+  }
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (!data.success) {
+      alert("Error: " + (data.error || "Failed to load evaluation reports."));
+      return;
+    }
+
+    globalAnalyticsData = data;
+    document.getElementById("activePeriodLabel").textContent = data.period_label || period;
+
+    renderSummaryCards(data.summary_cards);
+    renderPeriodComparison(data.period_comparison);
+    renderDailyTrendChart(data.daily_trend);
+    renderQualityDistributionCharts(data.quality_distribution);
+    renderComparisonTrendChart(data);
+    renderCenterTable(data.center_activity || []);
+    renderOfficerTable(data.officer_activity || []);
+    renderFarmerTable(data.farmer_history || []);
+    renderRecordsTable(data.records || []);
+
+  } catch (err) {
+    console.error("Evaluation reports fetch failed:", err);
+  }
+}
+
+function renderSummaryCards(sum) {
+  if (!sum) return;
+  document.getElementById("statTotalOnions").textContent = Number(sum.total_onions_evaluated || 0).toLocaleString("en-IN");
+  document.getElementById("statAvgOnionsDaily").textContent = `Avg ${sum.avg_onions_per_day || 0} / active day`;
+
+  document.getElementById("statTotalEvals").textContent = Number(sum.total_evaluations || 0).toLocaleString("en-IN");
+  document.getElementById("statAvgPerSession").textContent = `Avg ${sum.avg_onions_per_evaluation || 0} onions / session`;
+
+  document.getElementById("statTotalFarmers").textContent = sum.total_farmers_evaluated || 0;
+  document.getElementById("statTotalOfficers").textContent = sum.total_officers_active || 0;
+
+  document.getElementById("statGradeA").textContent = Number(sum.grade_a_count || 0).toLocaleString("en-IN");
+  document.getElementById("statGradeAPct").textContent = `${sum.grade_a_pct || 0}% of total evaluated`;
+
+  document.getElementById("statURS").textContent = Number(sum.urs_count || 0).toLocaleString("en-IN");
+  document.getElementById("statURSPct").textContent = `${sum.urs_pct || 0}% of total evaluated`;
+
+  document.getElementById("statRejected").textContent = Number(sum.rejected_count || 0).toLocaleString("en-IN");
+  document.getElementById("statRejectedPct").textContent = `${sum.rejected_pct || 0}% (Rotten + Sprouted)`;
+
+  document.getElementById("statActiveDays").textContent = `${sum.active_evaluation_days || 0} days`;
+  if (sum.highest_day && sum.highest_day.onions > 0) {
+    document.getElementById("statHighestDay").textContent = `Peak: ${sum.highest_day.onions} (${sum.highest_day.date})`;
+  } else {
+    document.getElementById("statHighestDay").textContent = "No evaluations recorded";
+  }
+}
+
+function renderPeriodComparison(cmp) {
+  if (!cmp) return;
+
+  function _formatBadge(obj, curEl, prevEl, badgeEl) {
+    curEl.textContent = Number(obj.current || 0).toLocaleString("en-IN");
+    prevEl.textContent = Number(obj.previous || 0).toLocaleString("en-IN");
+    badgeEl.textContent = obj.pct_change_str;
+    if (obj.direction === "up") {
+      badgeEl.className = "badge badge-success";
+    } else if (obj.direction === "down") {
+      badgeEl.className = "badge badge-grade-rej";
+    } else {
+      badgeEl.className = "badge";
+      badgeEl.style.background = "#e2e8f0";
+      badgeEl.style.color = "#475569";
+    }
+  }
+
+  _formatBadge(cmp.onions, document.getElementById("cmpOnionsCur"), document.getElementById("cmpOnionsPrev"), document.getElementById("cmpOnionsChange"));
+  _formatBadge(cmp.evaluations, document.getElementById("cmpEvalsCur"), document.getElementById("cmpEvalsPrev"), document.getElementById("cmpEvalsChange"));
+  _formatBadge(cmp.farmers, document.getElementById("cmpFarmersCur"), document.getElementById("cmpFarmersPrev"), document.getElementById("cmpFarmersChange"));
+  _formatBadge(cmp.grade_a, document.getElementById("cmpGradeACur"), document.getElementById("cmpGradeAPrev"), document.getElementById("cmpGradeAChange"));
+}
+
+function renderDailyTrendChart(dt) {
+  const ctx = document.getElementById("dailyTrendChart");
+  if (!ctx || !dt) return;
+  if (dailyTrendChartInstance) dailyTrendChartInstance.destroy();
+
+  dailyTrendChartInstance = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: dt.labels || [],
+      datasets: [{
+        label: "Onions Evaluated",
+        data: dt.onions || [],
+        borderColor: "#0f5132",
+        backgroundColor: "rgba(15, 81, 50, 0.08)",
+        fill: true,
+        tension: 0.3,
+        pointRadius: 4,
+        pointHoverRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { precision: 0 }
+        }
+      }
+    }
+  });
+}
+
+function renderQualityDistributionCharts(qd) {
+  if (!qd) return;
+
+  // Chart 2: 4-Defect breakdown (Healthy, Damaged, Rotten, Sprouted)
+  const ctxQuality = document.getElementById("qualityClassChart");
+  if (ctxQuality) {
+    if (qualityClassChartInstance) qualityClassChartInstance.destroy();
+    qualityClassChartInstance = new Chart(ctxQuality, {
+      type: "bar",
+      data: {
+        labels: ["Healthy", "Damaged", "Rotten", "Sprouted"],
+        datasets: [{
+          label: "Onions Count",
+          data: [
+            qd.healthy ? qd.healthy.count : 0,
+            qd.damaged ? qd.damaged.count : 0,
+            qd.rotten ? qd.rotten.count : 0,
+            qd.sprouted ? qd.sprouted.count : 0
+          ],
+          backgroundColor: ["#16a34a", "#d97706", "#dc2626", "#ea580c"],
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+      }
+    });
+  }
+
+  // Chart 3: Grade Distribution (Grade A, URS, Rejected)
+  const ctxGrade = document.getElementById("gradePieChart");
+  if (ctxGrade) {
+    if (gradePieChartInstance) gradePieChartInstance.destroy();
+    gradePieChartInstance = new Chart(ctxGrade, {
+      type: "doughnut",
+      data: {
+        labels: [
+          `Grade A (${qd.grade_a ? qd.grade_a.pct : 0}%)`,
+          `URS (${qd.urs ? qd.urs.pct : 0}%)`,
+          `Rejected (${qd.rejected ? qd.rejected.pct : 0}%)`
+        ],
+        datasets: [{
+          data: [
+            qd.grade_a ? qd.grade_a.count : 0,
+            qd.urs ? qd.urs.count : 0,
+            qd.rejected ? qd.rejected.count : 0
+          ],
+          backgroundColor: ["#16a34a", "#d97706", "#dc2626"]
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: "bottom" } }
+      }
+    });
+  }
+}
+
+function renderComparisonTrendChart(data) {
+  const ctx = document.getElementById("comparisonTrendChart");
+  if (!ctx) return;
+  if (comparisonTrendChartInstance) comparisonTrendChartInstance.destroy();
+
+  const trendData = currentTrendType === "weekly" ? data.weekly_trend : data.monthly_trend;
+  if (!trendData) return;
+
+  comparisonTrendChartInstance = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: trendData.labels || [],
+      datasets: [{
+        label: "Onions Evaluated",
+        data: trendData.onions || [],
+        backgroundColor: currentTrendType === "weekly" ? "#2563eb" : "#0f5132",
+        borderRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+}
+
+function renderCenterTable(centers) {
+  const tbody = document.getElementById("centerTableBody");
+  if (!centers || centers.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 2rem; color: var(--text-muted);">No procurement center evaluation records during this period.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = centers.map(c => `
+    <tr>
+      <td><b>${c.center_name}</b></td>
+      <td>${c.location}</td>
+      <td><b>${c.total_evaluations}</b></td>
+      <td><b>${Number(c.total_onions).toLocaleString("en-IN")}</b></td>
+      <td><span style="color: var(--grade-a); font-weight: 600;">${c.grade_a_count}</span> <small style="color: var(--text-muted);">(${c.grade_a_pct}%)</small></td>
+      <td><span style="color: var(--grade-urs); font-weight: 600;">${c.urs_count}</span> <small style="color: var(--text-muted);">(${c.urs_pct}%)</small></td>
+      <td><span style="color: var(--grade-rej); font-weight: 600;">${c.rejected_count}</span> <small style="color: var(--text-muted);">(${c.rejected_pct}%)</small></td>
+      <td>${c.farmers_evaluated}</td>
+      <td>${c.officers_active}</td>
+    </tr>
+  `).join("");
+}
+
+function renderOfficerTable(officers) {
+  const tbody = document.getElementById("officerTableBody");
+  if (!officers || officers.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 2rem; color: var(--text-muted);">No officer activity records during this period.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = officers.map(o => `
+    <tr>
+      <td><b>${o.officer_id}</b></td>
+      <td>${o.officer_name}</td>
+      <td>${o.procurement_center}</td>
+      <td><b>${o.evaluation_sessions}</b></td>
+      <td><b>${Number(o.total_onions).toLocaleString("en-IN")}</b></td>
+      <td>${o.farmers_evaluated}</td>
+      <td><span style="color: var(--grade-a);">${o.grade_a_count}</span></td>
+      <td><span style="color: var(--grade-urs);">${o.urs_count}</span></td>
+      <td><span style="color: var(--grade-rej);">${o.rejected_count}</span></td>
+    </tr>
+  `).join("");
+}
+
+function renderFarmerTable(farmers) {
+  const tbody = document.getElementById("farmerTableBody");
+  if (!farmers || farmers.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; padding: 2rem; color: var(--text-muted);">No farmer evaluations during this period.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = farmers.map(f => `
+    <tr>
+      <td><b>${f.farmer_id}</b></td>
+      <td>${f.farmer_name}</td>
+      <td>${f.mobile}</td>
+      <td>${f.district}</td>
+      <td><b>${f.total_evaluations}</b></td>
+      <td><b>${Number(f.total_onions).toLocaleString("en-IN")}</b></td>
+      <td><span style="color: var(--grade-a);">${f.grade_a_count}</span></td>
+      <td><span style="color: var(--grade-urs);">${f.urs_count}</span></td>
+      <td><span style="color: var(--grade-rej);">${f.rejected_count}</span></td>
+      <td><span style="font-size: 0.85rem; color: #475569;">${f.last_evaluation_date}</span></td>
+    </tr>
+  `).join("");
+}
+
+function filterFarmerTable() {
+  const q = document.getElementById("farmerSearchInput").value.toLowerCase();
+  const rows = document.querySelectorAll("#farmerTableBody tr");
+  rows.forEach(r => {
+    const text = r.textContent.toLowerCase();
+    r.style.display = text.includes(q) ? "" : "none";
+  });
+}
+
+function renderRecordsTable(records) {
+  const tbody = document.getElementById("recordsTableBody");
+  if (!records || records.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">No evaluation records found for this period.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = records.map(r => `
+    <tr>
+      <td><b>${r.report_id}</b></td>
+      <td>${r.evaluation_date}</td>
+      <td><b>${r.farmer_name}</b><br><small style="color: var(--text-muted);">${r.farmer_id}</small></td>
+      <td>${r.officer_name}<br><small style="color: var(--text-muted);">${r.procurement_center}</small></td>
+      <td><b>${r.total_onions}</b></td>
+      <td><span class="badge badge-grade-a">${r.grade_a_count}</span></td>
+      <td><span class="badge badge-grade-urs">${r.urs_count}</span></td>
+      <td><span class="badge badge-grade-rej">${r.rejected_count}</span></td>
+      <td><span class="badge ${r.overall_result.includes('Grade A') ? 'badge-success' : 'badge-warning'}">${r.overall_result}</span></td>
+      <td>₹${Number(r.total_payout || 0).toLocaleString("en-IN")}</td>
+      <td style="text-align: right; white-space: nowrap;">
+        <a href="${r.pdf_url}" target="_blank" class="btn btn-sm btn-outline" style="border-color: #cbd5e1;">📄 View PDF</a>
+      </td>
+    </tr>
+  `).join("");
+}
+
+function filterRecordsTable() {
+  const q = document.getElementById("recordSearchInput").value.toLowerCase();
+  const rows = document.querySelectorAll("#recordsTableBody tr");
+  rows.forEach(r => {
+    const text = r.textContent.toLowerCase();
+    r.style.display = text.includes(q) ? "" : "none";
+  });
+}
+
+function exportReport(format) {
+  const period = document.getElementById("reportPeriodSelect").value;
+  let url = `/api/evaluation-reports/export/${format}?period=${encodeURIComponent(period)}`;
+  if (period === "custom") {
+    const s = document.getElementById("customStartDate").value;
+    const e = document.getElementById("customEndDate").value;
+    if (s) url += `&start_date=${encodeURIComponent(s)}`;
+    if (e) url += `&end_date=${encodeURIComponent(e)}`;
+  }
+  window.open(url, "_blank");
+}
+
+function generatePdf(type) {
+  const url = `/api/evaluation-reports/export/${type}-pdf`;
+  window.open(url, "_blank");
+}
+
+document.addEventListener("DOMContentLoaded", fetchEvaluationAnalytics);
+</script>
+{% endblock %}

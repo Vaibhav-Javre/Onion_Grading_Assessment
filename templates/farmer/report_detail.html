@@ -12,16 +12,51 @@
     <h1 style="font-size: 1.75rem; color: var(--primary-dark); margin: 0;">
       Report ID: <span style="color: var(--primary-green);">{{ evaluation.report_id or evaluation.id }}</span>
     </h1>
-    <span class="badge badge-success" style="margin-top: 0.35rem;">Status: Officially Confirmed</span>
+    <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.4rem; flex-wrap: wrap;">
+      <span class="badge badge-success">Status: Officially Confirmed</span>
+      {% set rep_lang = evaluation.report_language or 'en' %}
+      {% if rep_lang == 'mr' %}
+        <span class="badge" style="background: #fef2f2; color: #b91c1c; border: 1.5px solid #fecaca; font-weight: 700; padding: 0.35rem 0.65rem;">🚩 अधिकारी निवडलेली भाषा: मराठी (Officer Selected Language: Marathi)</span>
+      {% elif rep_lang == 'hi' %}
+        <span class="badge" style="background: #fffbeb; color: #b45309; border: 1.5px solid #fde68a; font-weight: 700; padding: 0.35rem 0.65rem;">🇮🇳 अधिकारी द्वारा चयनित भाषा: हिंदी (Officer Selected Language: Hindi)</span>
+      {% else %}
+        <span class="badge" style="background: #f0fdf4; color: #166534; border: 1.5px solid #bbf7d0; font-weight: 700; padding: 0.35rem 0.65rem;">🇬🇧 Officer Selected Language: English</span>
+      {% endif %}
+    </div>
   </div>
 
-  <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-    <a href="/reports/download/Onion_Report_{{ evaluation.report_id or evaluation.id }}.pdf?inline=1" target="_blank" class="btn btn-outline btn-lg">
+  <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+    <a id="farmerPdfViewBtn" href="/reports/download/Onion_Report_{{ evaluation.report_id or evaluation.id }}.pdf?inline=1&lang={{ evaluation.report_language or 'en' }}" target="_blank" class="btn btn-outline btn-lg">
       👁️ View PDF in Browser
     </a>
-    <a href="/reports/download/Onion_Report_{{ evaluation.report_id or evaluation.id }}.pdf" download="Onion_Report_{{ evaluation.report_id or evaluation.id }}.pdf" class="btn btn-primary btn-lg" style="box-shadow: var(--shadow-md);">
+    <a id="farmerPdfDownloadBtn" href="/reports/download/Onion_Report_{{ evaluation.report_id or evaluation.id }}.pdf?lang={{ evaluation.report_language or 'en' }}" download="Onion_Report_{{ evaluation.report_id or evaluation.id }}.pdf" class="btn btn-primary btn-lg" style="box-shadow: var(--shadow-md);">
       📥 Download Official PDF Report (.pdf)
     </a>
+  </div>
+</div>
+
+<!-- Language Selection / Switcher Bar for Farmer -->
+<div class="card" style="margin-bottom: 1.5rem; border: 1px solid #cbd5e1; background: #f8fafc; padding: 0.75rem 1.25rem;">
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+      <span style="font-size: 1.15rem;">🌐</span>
+      <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-dark);">
+        Report Language Options / अहवाल भाषा पर्याय / रिपोर्ट भाषा विकल्प:
+      </span>
+      <span style="font-size: 0.8rem; color: var(--text-muted);">(Officer dispatched in <b>{{ 'Marathi (मराठी)' if rep_lang == 'mr' else ('Hindi (हिंदी)' if rep_lang == 'hi' else 'English') }}</b>)</span>
+    </div>
+
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <button type="button" id="langBtnEn" onclick="switchReportLanguage('en')" class="btn btn-sm {{ 'btn-primary' if rep_lang == 'en' else 'btn-outline' }}" style="padding: 0.3rem 0.8rem; font-size: 0.8rem;">
+        🇬🇧 English
+      </button>
+      <button type="button" id="langBtnHi" onclick="switchReportLanguage('hi')" class="btn btn-sm {{ 'btn-primary' if rep_lang == 'hi' else 'btn-outline' }}" style="padding: 0.3rem 0.8rem; font-size: 0.8rem;">
+        🇮🇳 हिंदी (Hindi)
+      </button>
+      <button type="button" id="langBtnMr" onclick="switchReportLanguage('mr')" class="btn btn-sm {{ 'btn-primary' if rep_lang == 'mr' else 'btn-outline' }}" style="padding: 0.3rem 0.8rem; font-size: 0.8rem;">
+        🚩 मराठी (Marathi)
+      </button>
+    </div>
   </div>
 </div>
 
@@ -284,6 +319,30 @@ function switchReportImage(btn, url) {
     const img = container.querySelector('#farmerReportAnnotatedImg') || container.querySelector('img');
     if (img) img.src = url;
   }
+}
+
+function switchReportLanguage(lang) {
+  const reportCode = "{{ evaluation.report_id or evaluation.id }}";
+  const viewBtn = document.getElementById("farmerPdfViewBtn");
+  const downloadBtn = document.getElementById("farmerPdfDownloadBtn");
+  
+  if (viewBtn) {
+    viewBtn.href = `/reports/download/Onion_Report_${reportCode}.pdf?inline=1&lang=${lang}`;
+  }
+  if (downloadBtn) {
+    downloadBtn.href = `/reports/download/Onion_Report_${reportCode}.pdf?lang=${lang}`;
+  }
+
+  ['en', 'hi', 'mr'].forEach(l => {
+    const btn = document.getElementById('langBtn' + l.charAt(0).toUpperCase() + l.slice(1));
+    if (btn) {
+      if (l === lang) {
+        btn.className = "btn btn-sm btn-primary";
+      } else {
+        btn.className = "btn btn-sm btn-outline";
+      }
+    }
+  });
 }
 
 document.addEventListener("DOMContentLoaded", () => {

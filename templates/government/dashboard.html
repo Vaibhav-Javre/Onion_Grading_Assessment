@@ -30,6 +30,24 @@
   </div>
 </div>
 
+<!-- Pending Officer Verification Alert Banner -->
+<div id="pendingVerificationAlert" style="display: none; background: #fffbeb; border: 1.5px solid #f59e0b; border-radius: var(--radius-md); padding: 1rem 1.25rem; margin-bottom: 1.5rem; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; box-shadow: var(--shadow-sm);">
+  <div style="display: flex; align-items: center; gap: 0.75rem;">
+    <span style="font-size: 1.6rem; line-height: 1;">⏳</span>
+    <div>
+      <div style="font-weight: 800; color: #92400e; font-size: 0.98rem;">
+        Pending Officer Accreditations: <span id="alertPendingOfficerCount">0</span> Registration Request(s)
+      </div>
+      <div style="font-size: 0.85rem; color: #b45309; margin-top: 0.15rem;">
+        Newly registered Procurement Officers require Government identity verification before system access is granted.
+      </div>
+    </div>
+  </div>
+  <a href="{{ url_for('views.government_officer_verification') }}" class="btn btn-sm btn-primary" style="background: #d97706; border-color: #d97706; font-weight: 700; white-space: nowrap;">
+    Verify Officers Now →
+  </a>
+</div>
+
 <!-- 8 KPI Metric Cards -->
 <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1rem; margin-bottom: 1.75rem;">
   <div class="stat-card">
@@ -315,6 +333,17 @@ async function fetchDashboardData() {
 
     document.getElementById("statTotalPayout").textContent = `₹${(s.total_payout || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
     document.getElementById("statTotalVolume").textContent = `${(s.total_quintals || 0).toLocaleString('en-IN', {minimumFractionDigits: 1})} Quintals`;
+
+    // Check Pending Officer Verifications
+    const officerStats = data.officer_stats || (s && s.officer_stats);
+    if (officerStats && officerStats.pending_requests > 0) {
+      const alertBox = document.getElementById("pendingVerificationAlert");
+      const countSpan = document.getElementById("alertPendingOfficerCount");
+      if (alertBox && countSpan) {
+        countSpan.textContent = officerStats.pending_requests;
+        alertBox.style.display = "flex";
+      }
+    }
 
     // Render Charts
     renderGradeDoughnut(s.grades);

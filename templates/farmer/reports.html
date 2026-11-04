@@ -15,12 +15,18 @@
 
     <!-- Filters -->
     <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-      <input type="text" id="reportSearch" class="form-control" placeholder="Search by Report ID..." style="width: 220px; font-size: 0.85rem;">
-      <select id="gradeFilter" class="form-control" style="width: 150px; font-size: 0.85rem;">
+      <input type="text" id="reportSearch" class="form-control" placeholder="Search by Report ID..." style="width: 200px; font-size: 0.85rem;">
+      <select id="gradeFilter" class="form-control" style="width: 140px; font-size: 0.85rem;">
         <option value="">All Grades</option>
         <option value="Grade A">Grade A</option>
         <option value="URS">URS</option>
         <option value="Rejected">Rejected</option>
+      </select>
+      <select id="langFilter" class="form-control" style="width: 160px; font-size: 0.85rem;">
+        <option value="">All Languages / भाषा</option>
+        <option value="en">🇬🇧 English</option>
+        <option value="hi">🇮🇳 हिंदी (Hindi)</option>
+        <option value="mr">🚩 मराठी (Marathi)</option>
       </select>
       <button type="button" onclick="loadFarmerReports()" class="btn btn-sm btn-secondary">Filter</button>
     </div>
@@ -33,6 +39,7 @@
           <tr>
             <th>Report ID</th>
             <th>Date</th>
+            <th>Language</th>
             <th>Procurement Officer</th>
             <th>Center</th>
             <th>Total</th>
@@ -50,7 +57,7 @@
           </tr>
         </thead>
         <tbody id="farmerReportsTableBody">
-          <tr><td colspan="16" style="text-align: center; padding: 2rem;">Loading reports...</td></tr>
+          <tr><td colspan="17" style="text-align: center; padding: 2rem;">Loading reports...</td></tr>
         </tbody>
       </table>
     </div>
@@ -63,26 +70,36 @@
 async function loadFarmerReports() {
   const search = document.getElementById("reportSearch").value.trim();
   const grade = document.getElementById("gradeFilter").value;
+  const lang = document.getElementById("langFilter").value;
   const tbody = document.getElementById("farmerReportsTableBody");
 
   try {
-    const res = await fetch(`/api/farmer/reports?search=${encodeURIComponent(search)}&grade=${encodeURIComponent(grade)}`);
+    const res = await fetch(`/api/farmer/reports?search=${encodeURIComponent(search)}&grade=${encodeURIComponent(grade)}&language=${encodeURIComponent(lang)}`);
     const data = await res.json();
 
     if (!data.success || !data.reports || data.reports.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="16" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">No evaluation reports found.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="17" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">No evaluation reports found.</td></tr>`;
       return;
     }
+
+    const langBadges = {
+      mr: '<span class="badge" style="background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; font-weight: 700;">🚩 मराठी</span>',
+      hi: '<span class="badge" style="background: #fffbeb; color: #b45309; border: 1px solid #fde68a; font-weight: 700;">🇮🇳 हिंदी</span>',
+      en: '<span class="badge" style="background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; font-weight: 700;">🇬🇧 English</span>'
+    };
 
     tbody.innerHTML = data.reports.map(r => {
       const pe = r.price_estimation || {};
       const estPrice = pe.estimated_price_per_quintal ? `₹${pe.estimated_price_per_quintal.toLocaleString('en-IN')}/q` : '--';
       const payout = pe.total_payout && pe.total_payout > 0 ? `₹${pe.total_payout.toLocaleString('en-IN')}` : '--';
+      const repLang = r.report_language || 'en';
+      const langBadge = langBadges[repLang] || langBadges['en'];
       
       return `
       <tr>
         <td><b>${r.report_id || 'ONR-' + r.id}</b></td>
         <td>${r.evaluation_date}</td>
+        <td>${langBadge}</td>
         <td>${r.officer ? r.officer.name : 'Officer'}</td>
         <td style="font-size: 0.8rem; color: var(--text-muted);">${r.officer ? r.officer.procurement_center : ''}</td>
         <td><b>${r.total_onions}</b></td>
@@ -98,13 +115,13 @@ async function loadFarmerReports() {
         <td><b style="color: var(--primary-dark);">${payout}</b></td>
         <td style="white-space: nowrap;">
           <a href="/farmer/report/${r.report_id || r.id}" class="btn btn-sm btn-outline">View Report</a>
-          <a href="/reports/download/Onion_Report_${r.report_id || r.id}.pdf" download="Onion_Report_${r.report_id || r.id}.pdf" target="_blank" class="btn btn-sm btn-primary">Download PDF</a>
+          <a href="/reports/download/Onion_Report_${r.report_id || r.id}.pdf?lang=${repLang}" download="Onion_Report_${r.report_id || r.id}.pdf" target="_blank" class="btn btn-sm btn-primary">Download PDF</a>
         </td>
       </tr>
     `;
     }).join("");
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="14" style="text-align: center; color: #ef4444; padding: 2rem;">Error loading reports.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="17" style="text-align: center; color: #ef4444; padding: 2rem;">Error loading reports.</td></tr>`;
   }
 }
 

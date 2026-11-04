@@ -1,3 +1,4 @@
+import gc
 import os
 import time
 import uuid
@@ -8,6 +9,7 @@ import numpy as np
 
 from backend.ai.classifier import OnionClassifier
 from backend.ai.detector import OnionDetector
+from backend.ai.preprocessor import ImagePreprocessor, ImageQualityError
 from config import Config
 
 # High-contrast color palette (BGR format for OpenCV)
@@ -40,10 +42,24 @@ def evaluate_onion_image(image_path, yolo_conf=None, classifier_conf=None):
     if classifier_conf is None:
         classifier_conf = Config.CLASSIFIER_CONFIDENCE_THRESHOLD
 
-    image = cv2.imread(image_path)
-    if image is None:
+    raw_image = cv2.imread(image_path)
+    if raw_image is None:
         raise ValueError(f"Could not read image at path: {image_path}")
 
+    # Downscale excessively large images (e.g. 4K/8K smartphone camera photos) to max 1600px
+    # to safeguard memory and avoid OOM crashes
+    h, w = raw_image.shape[:2]
+    max_dim = 1600
+    if max(h, w) > max_dim:
+        scale = max_dim / float(max(h, w))
+        raw_image = cv2.resize(raw_image, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+
+    filename = os.path.basename(image_path)
+    val_res = ImagePreprocessor.validate_and_preprocess(raw_image, image_name=filename)
+    if not val_res["is_valid"]:
+        raise ImageQualityError(val_res["error_message"], error_code=val_res["error_code"])
+
+    image = val_res["processed_image"]
     _h, w = image.shape[:2]
     annotated_image = image.copy()
 
@@ -60,10 +76,20 @@ def evaluate_onion_image(image_path, yolo_conf=None, classifier_conf=None):
     crops = []
     for det in raw_detections:
         x1, y1, x2, y2 = det["box"]
-        crop = image[y1:y2, x1:x2]
+        crop = raw_image[y1:y2, x1:x2].copy()
         if crop is not None and crop.size > 0:
             valid_detections.append(det)
             crops.append(crop)
+
+    # Check: Verify at least one onion is detected in image
+    if len(valid_detections) == 0:
+        raise ImageQualityError(
+            "No Onions Detected. Please upload an image containing clearly visible onions.",
+            error_code="NO_ONIONS_DETECTED"
+        )
+
+    # Check: Analyze if onions are crowded or overlapping
+    is_crowded, overlap_pairs, overlap_note = ImagePreprocessor.check_onion_overlaps(valid_detections)
 
     # Steps 3, 4, 5: Preprocess, stack into NumPy batch, and run classifier ONCE
     cls_start = time.perf_counter()
@@ -168,6 +194,9 @@ def evaluate_onion_image(image_path, yolo_conf=None, classifier_conf=None):
         f"{urs} as URS and {rejected} as Rejected."
     )
 
+    if overlap_note:
+        quality_summary = f"{quality_summary} {overlap_note}"
+
     # Save annotated output image
     os.makedirs(Config.OUTPUT_FOLDER, exist_ok=True)
     out_filename = f"annotated_{uuid.uuid4().hex}.jpg"
@@ -180,6 +209,7 @@ def evaluate_onion_image(image_path, yolo_conf=None, classifier_conf=None):
         f"YOLO: {yolo_time:.3f}s | Classifier: {cls_time:.3f}s | "
         f"Total Pipeline: {total_pipeline_time:.3f}s"
     )
+    gc.collect()
 
     return {
         "total_onions": total_onions,
@@ -199,7 +229,13 @@ def evaluate_onion_image(image_path, yolo_conf=None, classifier_conf=None):
         "quality_summary": quality_summary,
         "annotated_image_filename": out_filename,
         "annotated_image_path": out_path,
-        "detections": items
+        "detections": items,
+        "is_overlapping": is_crowded,
+        "overlapping_pairs": overlap_pairs,
+        "advisory_notes": overlap_note,
+        "was_enhanced": val_res.get("was_enhanced", False),
+        "sharpness_score": val_res.get("sharpness_score", 0.0),
+        "brightness_score": val_res.get("brightness_score", 0.0)
     }
 
 
@@ -268,34 +304,65 @@ def evaluate_multiple_onion_images(image_paths, yolo_conf=None, classifier_conf=
 
     parsed_images = []
     all_crops = []
+    any_crowded = False
+    total_overlapping_pairs = 0
 
     # Step 1: Run YOLO detection separately on each image and collect crops
     yolo_start = time.perf_counter()
     for order_idx, img_path in enumerate(image_paths, start=1):
-        image = cv2.imread(img_path)
-        if image is None:
+        raw_image = cv2.imread(img_path)
+        if raw_image is None:
             raise ValueError(f"Could not read image at path: {img_path}")
 
+        # Downscale excessively large images (e.g. 4K/8K smartphone camera photos) to max 1600px
+        # to safeguard memory and avoid OOM crashes
+        h, w = raw_image.shape[:2]
+        max_dim = 1600
+        if max(h, w) > max_dim:
+            scale = max_dim / float(max(h, w))
+            raw_image = cv2.resize(raw_image, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+
+        filename = os.path.basename(img_path)
+        label_name = f"Angle #{order_idx} ({filename})"
+        val_res = ImagePreprocessor.validate_and_preprocess(raw_image, image_name=label_name)
+        if not val_res["is_valid"]:
+            raise ImageQualityError(val_res["error_message"], error_code=val_res["error_code"])
+
+        image = val_res["processed_image"]
         raw_detections = detector.detect(image, conf_threshold=yolo_conf)
 
         valid_detections = []
         start_crop_idx = len(all_crops)
         for det in raw_detections:
             x1, y1, x2, y2 = det["box"]
-            crop = image[y1:y2, x1:x2]
+            crop = raw_image[y1:y2, x1:x2].copy()
             if crop is not None and crop.size > 0:
                 valid_detections.append(det)
                 all_crops.append(crop)
         end_crop_idx = len(all_crops)
+
+        img_crowded, img_pairs, _ = ImagePreprocessor.check_onion_overlaps(valid_detections)
+        if img_crowded:
+            any_crowded = True
+            total_overlapping_pairs += img_pairs
 
         parsed_images.append({
             "order_idx": order_idx,
             "img_path": img_path,
             "image": image,
             "valid_detections": valid_detections,
-            "crop_slice": (start_crop_idx, end_crop_idx)
+            "crop_slice": (start_crop_idx, end_crop_idx),
+            "is_overlapping": img_crowded,
+            "was_enhanced": val_res.get("was_enhanced", False)
         })
     yolo_time = time.perf_counter() - yolo_start
+
+    # Check: Verify at least one onion is detected across all uploaded photos
+    if len(all_crops) == 0:
+        raise ImageQualityError(
+            "No Onions Detected. Please upload an image containing clearly visible onions.",
+            error_code="NO_ONIONS_DETECTED"
+        )
 
     # Step 2: Global batch classification ONLY ONCE across all collected crops
     cls_start = time.perf_counter()
@@ -482,6 +549,14 @@ def evaluate_multiple_onion_images(image_paths, yolo_conf=None, classifier_conf=
             f"{urs} as URS and {rejected} as Rejected."
         )
 
+    overlap_note = None
+    if any_crowded:
+        overlap_note = (
+            "Note: Onions appear crowded or overlapping in the sample photo. "
+            "Spread the onions across the surface for better result and maximum AI grading accuracy."
+        )
+        quality_summary = f"{quality_summary} {overlap_note}"
+
     # Create collage for primary display if multiple images, else use the single annotated image
     annotated_paths = [img["annotated_image_path"] for img in per_image_results]
     if total_images > 1:
@@ -495,6 +570,7 @@ def evaluate_multiple_onion_images(image_paths, yolo_conf=None, classifier_conf=
         f"YOLO Total: {yolo_time:.3f}s | Global Classifier Batch: {cls_time:.3f}s | "
         f"Total Pipeline: {total_pipeline_time:.3f}s"
     )
+    gc.collect()
 
     return {
         "total_images": total_images,
@@ -517,5 +593,8 @@ def evaluate_multiple_onion_images(image_paths, yolo_conf=None, classifier_conf=
         "primary_annotated_image_path": primary_annotated_path,
         "primary_annotated_image_filename": os.path.basename(primary_annotated_path),
         "per_image_results": per_image_results,
-        "detections": all_detections
+        "detections": all_detections,
+        "is_overlapping": any_crowded,
+        "overlapping_pairs": total_overlapping_pairs,
+        "advisory_notes": overlap_note
     }

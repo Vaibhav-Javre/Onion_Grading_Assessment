@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+
+{% block title %}My Evaluation History - Farmer Portal{% endblock %}
+{% block page_title %}My Evaluation History & Quality Analytics{% endblock %}
+
+{% block content %}
+<!-- Top Header with Farmer Info -->
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h1 style="font-size: 1.75rem; color: var(--primary-dark);">My Evaluation History</h1>
+    <p style="color: var(--text-muted); font-size: 0.95rem;">
+      Grower: <b>{{ user.name }}</b> • Farmer ID: <span class="badge badge-info">{{ farmer.farmer_id }}</span> • Village: {{ farmer.village }}, {{ farmer.district }}
+    </p>
+  </div>
+  <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+    <button onclick="exportFarmerData('csv')" class="btn btn-sm btn-outline" style="border-color: #cbd5e1;">📥 Download My Records (CSV)</button>
+    <button onclick="fetchFarmerHistory()" class="btn btn-sm btn-primary">🔄 Refresh History</button>
+  </div>
+</div>
+
+<!-- 6 Summary Metric Cards -->
+<div class="dashboard-grid" style="margin-bottom: 1.75rem;">
+  <!-- Total Onions Evaluated -->
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Total Onions Evaluated</span>
+      <span id="farmerTotalOnions" class="stat-value" style="color: var(--primary-dark);">--</span>
+      <span class="stat-sub">Across all confirmed sessions</span>
+    </div>
+    <div class="stat-icon green">🧅</div>
+  </div>
+
+  <!-- Total Evaluation Sessions -->
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Total Evaluations</span>
+      <span id="farmerTotalEvals" class="stat-value" style="color: #1e3a8a;">--</span>
+      <span class="stat-sub">Completed quality assessments</span>
+    </div>
+    <div class="stat-icon blue">📋</div>
+  </div>
+
+  <!-- Grade A Count & Pct -->
+  <div class="stat-card grade-a">
+    <div class="stat-info">
+      <span class="stat-label">Grade A (Premium)</span>
+      <span id="farmerGradeA" class="stat-value" style="color: var(--grade-a);">--</span>
+      <span id="farmerGradeAPct" class="stat-sub">--% of your crop</span>
+    </div>
+    <div class="stat-icon green">✓</div>
+  </div>
+
+  <!-- URS Standard -->
+  <div class="stat-card urs">
+    <div class="stat-info">
+      <span class="stat-label">URS Standard</span>
+      <span id="farmerURS" class="stat-value" style="color: var(--grade-urs);">--</span>
+      <span id="farmerURSPct" class="stat-sub">--% of your crop</span>
+    </div>
+    <div class="stat-icon amber">⚠️</div>
+  </div>
+
+  <!-- Rejected -->
+  <div class="stat-card rejected">
+    <div class="stat-info">
+      <span class="stat-label">Rejected Bulbs</span>
+      <span id="farmerRejected" class="stat-value" style="color: var(--grade-rej);">--</span>
+      <span id="farmerRejectedPct" class="stat-sub">Rotten + Sprouted</span>
+    </div>
+    <div class="stat-icon red">✕</div>
+  </div>
+
+  <!-- Last Evaluation Date -->
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Last Evaluation Date</span>
+      <span id="farmerLastEvalDate" class="stat-value" style="font-size: 1.15rem; color: #334155;">--</span>
+      <span id="farmerLastResult" class="stat-sub">Latest batch status</span>
+    </div>
+    <div class="stat-icon blue">📅</div>
+  </div>
+</div>
+
+<!-- Charts Row -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+  <!-- Evaluation History Over Time (Line Chart) -->
+  <div class="card" style="margin-bottom: 0;">
+    <div class="card-header">
+      <h3 style="font-size: 1.05rem;">Evaluation Volume Over Time</h3>
+      <span class="badge badge-info">Chronological Assessments</span>
+    </div>
+    <div style="height: 270px; padding: 0.5rem;">
+      <canvas id="farmerTimelineChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Quality & Defect Distribution -->
+  <div class="card" style="margin-bottom: 0;">
+    <div class="card-header">
+      <h3 style="font-size: 1.05rem;">Crop Quality & Defect Profile</h3>
+      <span class="badge badge-info">Healthy vs Defect Ratio</span>
+    </div>
+    <div style="height: 270px; padding: 0.5rem;">
+      <canvas id="farmerQualityChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- Detailed Evaluation History Table -->
+<div class="card">
+  <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+    <div>
+      <h3 style="font-size: 1.15rem;">My Evaluation Assessment Records</h3>
+      <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">Verified digital reports and official certificates for your lots.</p>
+    </div>
+    <div>
+      <input type="text" id="farmerTableSearch" onkeyup="filterFarmerEvalTable()" placeholder="Search Report ID or Mandi..." class="form-control" style="width: 220px; font-size: 0.85rem; padding: 0.4rem 0.6rem;">
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="farmerHistoryGrid">
+      <thead>
+        <tr>
+          <th>Report ID</th>
+          <th>Evaluation Date</th>
+          <th>Procurement Officer</th>
+          <th>Procurement Center</th>
+          <th>Total Bulbs</th>
+          <th>Grade A</th>
+          <th>URS</th>
+          <th>Rejected</th>
+          <th>Final Result</th>
+          <th style="text-align: right;">Official Report</th>
+        </tr>
+      </thead>
+      <tbody id="farmerHistoryTbody">
+        <tr>
+          <td colspan="10" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">
+            Loading your verified evaluation records...
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+let farmerTimelineChartInstance = null;
+let farmerQualityChartInstance = null;
+
+async function fetchFarmerHistory() {
+  try {
+    const res = await fetch("/api/evaluation-reports/analytics?period=this_year");
+    const data = await res.json();
+
+    if (!data.success) {
+      alert("Error: " + (data.error || "Failed to load evaluation history"));
+      return;
+    }
+
+    const sum = data.summary_cards || {};
+    document.getElementById("farmerTotalOnions").textContent = Number(sum.total_onions_evaluated || 0).toLocaleString("en-IN");
+    document.getElementById("farmerTotalEvals").textContent = Number(sum.total_evaluations || 0).toLocaleString("en-IN");
+
+    document.getElementById("farmerGradeA").textContent = Number(sum.grade_a_count || 0).toLocaleString("en-IN");
+    document.getElementById("farmerGradeAPct").textContent = `${sum.grade_a_pct || 0}% of your onions`;
+
+    document.getElementById("farmerURS").textContent = Number(sum.urs_count || 0).toLocaleString("en-IN");
+    document.getElementById("farmerURSPct").textContent = `${sum.urs_pct || 0}% of your onions`;
+
+    document.getElementById("farmerRejected").textContent = Number(sum.rejected_count || 0).toLocaleString("en-IN");
+    document.getElementById("farmerRejectedPct").textContent = `${sum.rejected_pct || 0}% (Rotten/Sprouted)`;
+
+    const records = data.records || [];
+    if (records.length > 0) {
+      document.getElementById("farmerLastEvalDate").textContent = records[0].date_only || records[0].evaluation_date;
+      document.getElementById("farmerLastResult").textContent = `Result: ${records[0].overall_result}`;
+    } else {
+      document.getElementById("farmerLastEvalDate").textContent = "No evaluations yet";
+      document.getElementById("farmerLastResult").textContent = "Awaiting first harvest assessment";
+    }
+
+    renderFarmerCharts(data);
+    renderFarmerRecords(records);
+
+  } catch (err) {
+    console.error("Farmer history fetch failed:", err);
+  }
+}
+
+function renderFarmerCharts(data) {
+  const dt = data.daily_trend || {};
+  const qd = data.quality_distribution || {};
+
+  // Timeline Line Chart
+  const ctxTimeline = document.getElementById("farmerTimelineChart");
+  if (ctxTimeline) {
+    if (farmerTimelineChartInstance) farmerTimelineChartInstance.destroy();
+    farmerTimelineChartInstance = new Chart(ctxTimeline, {
+      type: "line",
+      data: {
+        labels: dt.labels || [],
+        datasets: [{
+          label: "Onions Evaluated",
+          data: dt.onions || [],
+          borderColor: "#16a34a",
+          backgroundColor: "rgba(22, 163, 74, 0.08)",
+          fill: true,
+          tension: 0.3,
+          pointRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+      }
+    });
+  }
+
+  // Quality Profile Chart
+  const ctxQuality = document.getElementById("farmerQualityChart");
+  if (ctxQuality) {
+    if (farmerQualityChartInstance) farmerQualityChartInstance.destroy();
+    farmerQualityChartInstance = new Chart(ctxQuality, {
+      type: "doughnut",
+      data: {
+        labels: [
+          `Healthy (${qd.healthy ? qd.healthy.pct : 0}%)`,
+          `Damaged (${qd.damaged ? qd.damaged.pct : 0}%)`,
+          `Rotten (${qd.rotten ? qd.rotten.pct : 0}%)`,
+          `Sprouted (${qd.sprouted ? qd.sprouted.pct : 0}%)`
+        ],
+        datasets: [{
+          data: [
+            qd.healthy ? qd.healthy.count : 0,
+            qd.damaged ? qd.damaged.count : 0,
+            qd.rotten ? qd.rotten.count : 0,
+            qd.sprouted ? qd.sprouted.count : 0
+          ],
+          backgroundColor: ["#16a34a", "#d97706", "#dc2626", "#ea580c"]
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: "bottom" } }
+      }
+    });
+  }
+}
+
+function renderFarmerRecords(records) {
+  const tbody = document.getElementById("farmerHistoryTbody");
+  if (!records || records.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">No confirmed evaluation records found in your account.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = records.map(r => `
+    <tr>
+      <td><b>${r.report_id}</b></td>
+      <td>${r.evaluation_date}</td>
+      <td>${r.officer_name}</td>
+      <td>${r.procurement_center}</td>
+      <td><b>${r.total_onions}</b></td>
+      <td><span class="badge badge-grade-a">${r.grade_a_count}</span></td>
+      <td><span class="badge badge-grade-urs">${r.urs_count}</span></td>
+      <td><span class="badge badge-grade-rej">${r.rejected_count}</span></td>
+      <td><span class="badge ${r.overall_result.includes('Grade A') ? 'badge-success' : 'badge-warning'}">${r.overall_result}</span></td>
+      <td style="text-align: right; white-space: nowrap;">
+        <a href="/farmer/report/${r.report_id}" class="btn btn-sm btn-outline">View</a>
+        <a href="${r.pdf_url}" target="_blank" class="btn btn-sm btn-primary">PDF</a>
+      </td>
+    </tr>
+  `).join("");
+}
+
+function filterFarmerEvalTable() {
+  const q = document.getElementById("farmerTableSearch").value.toLowerCase();
+  const rows = document.querySelectorAll("#farmerHistoryTbody tr");
+  rows.forEach(r => {
+    const text = r.textContent.toLowerCase();
+    r.style.display = text.includes(q) ? "" : "none";
+  });
+}
+
+function exportFarmerData(format) {
+  window.open(`/api/evaluation-reports/export/${format}?period=this_year`, "_blank");
+}
+
+document.addEventListener("DOMContentLoaded", fetchFarmerHistory);
+</script>
+{% endblock %}

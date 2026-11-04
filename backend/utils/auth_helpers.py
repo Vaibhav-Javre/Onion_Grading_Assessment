@@ -47,6 +47,17 @@ def role_required(*allowed_roles):
                 elif current_role in ("government", "admin"):
                     return redirect(url_for("views.government_dashboard"))
                 return redirect(url_for("views.home"))
+
+            # Extra security: If user is an officer, strictly verify they are APPROVED and active
+            if current_role == "officer":
+                user = get_current_user()
+                if not user or not user.officer_profile or user.officer_profile.status != "APPROVED" or not user.officer_profile.is_active:
+                    session.clear()
+                    if request.is_json or request.path.startswith("/api/"):
+                        return jsonify({"success": False, "error": "Access denied. Officer account is not approved by Government."}), 403
+                    flash("Your account is pending Government verification or is inactive.", "warning")
+                    return redirect(url_for("views.login_officer"))
+
             return f(*args, **kwargs)
         return decorated_function
     return decorator
@@ -60,6 +71,20 @@ def generate_farmer_id():
     while True:
         candidate = f"FMR-{year}-{count:04d}"
         if not FarmerProfile.query.filter_by(farmer_id=candidate).first():
+            return candidate
+        count += 1
+
+def generate_application_id():
+    """Generates unique Officer Application ID like APP-2026-0001"""
+    year = datetime.now(timezone.utc).year
+    from backend.models.officer import OfficerProfile
+    count = db.session.query(OfficerProfile).count() + 1
+    while True:
+        candidate = f"APP-{year}-{count:04d}"
+        exists = OfficerProfile.query.filter(
+            (OfficerProfile.application_id == candidate) | (OfficerProfile.officer_id == candidate)
+        ).first()
+        if not exists:
             return candidate
         count += 1
 

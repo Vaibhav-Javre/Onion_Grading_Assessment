@@ -11,6 +11,7 @@ from backend.routes.government import government_bp
 from backend.routes.market import market_bp
 from backend.routes.officer import officer_bp
 from backend.routes.reports import reports_bp
+from backend.routes.evaluation_reports import evaluation_reports_bp
 from backend.routes.views import views_bp
 from backend.utils.seed_data import seed_demo_data
 from config import Config
@@ -35,6 +36,7 @@ def create_app():
     app.register_blueprint(farmer_bp)
     app.register_blueprint(officer_bp)
     app.register_blueprint(reports_bp)
+    app.register_blueprint(evaluation_reports_bp)
     app.register_blueprint(market_bp)
     app.register_blueprint(government_bp)
 
@@ -91,4 +93,9 @@ app = create_app()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5000"))
-    app.run(host="0.0.0.0", port=port, debug=True, use_reloader=False)
+    debug_mode = os.environ.get("FLASK_DEBUG", "0").lower() in ("1", "true", "yes")
+    try:
+        app.run(host="0.0.0.0", port=port, debug=debug_mode, use_reloader=False, threaded=True)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()

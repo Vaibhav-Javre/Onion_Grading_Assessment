@@ -4,9 +4,11 @@ from datetime import datetime, timedelta, timezone
 from flask import Blueprint, jsonify, request
 
 from backend.ai.pipeline import evaluate_multiple_onion_images
+from backend.ai.preprocessor import ImageQualityError
 from backend.database.db import db
 from backend.models.evaluation import Evaluation, EvaluationImage, EvaluationItem
 from backend.models.farmer import FarmerProfile
+from backend.models.officer import OfficerFarmer, OfficerProfile
 from backend.models.report import Report
 from backend.models.user import User
 from backend.services.market_price_service import MarketPriceService
@@ -39,7 +41,7 @@ def get_dashboard():
     all_evals = Evaluation.query.filter_by(status="confirmed").all()
     today_evals = [e for e in all_evals if e.evaluation_date and e.evaluation_date.replace(tzinfo=timezone.utc) >= today_start]
 
-    total_farmers = FarmerProfile.query.count()
+    total_farmers = OfficerFarmer.query.filter_by(officer_id=officer.id).count()
     total_onions = sum(e.total_onions for e in all_evals)
     total_grade_a = sum(e.grade_a_count for e in all_evals)
     total_urs = sum(e.urs_count for e in all_evals)
@@ -102,11 +104,21 @@ def get_dashboard():
 @login_required
 @role_required("officer")
 def get_farmers():
-    query = request.args.get("query", "").strip()
-    farmer_query = FarmerProfile.query.join(User)
+    """
+    Returns only the farmers in THIS officer's 'My Farmers' list.
+    Supports optional query filter (name, phone, farmer_id, village, taluka, district).
+    """
+    user = get_current_user()
+    officer = user.officer_profile
+    if not officer:
+        return jsonify({"success": False, "error": "Officer profile not found."}), 404
 
+    query = request.args.get("query", "").strip()
+
+    # Query OfficerFarmer joined with FarmerProfile and User for this officer
+    q = OfficerFarmer.query.filter_by(officer_id=officer.id).join(FarmerProfile).join(User)
     if query:
-        farmer_query = farmer_query.filter(
+        q = q.filter(
             (FarmerProfile.farmer_id.ilike(f"%{query}%")) |
             (User.name.ilike(f"%{query}%")) |
             (User.phone.ilike(f"%{query}%")) |
@@ -114,10 +126,232 @@ def get_farmers():
             (FarmerProfile.district.ilike(f"%{query}%"))
         )
 
-    farmers = farmer_query.order_by(User.name).all()
+    links = q.order_by(OfficerFarmer.created_at.desc(), User.name.asc()).all()
     return jsonify({
         "success": True,
-        "farmers": [f.to_dict() for f in farmers]
+        "count": len(links),
+        "farmers": [link.to_dict() for link in links]
+    }), 200
+
+
+@officer_bp.route("/farmers/search", methods=["GET"])
+@login_required
+@role_required("officer")
+def search_farmer_registry():
+    """
+    Officer searches an existing farmer from the central Farmer Registry
+    using Farmer ID OR Mobile Number.
+    If found, displays the registered farmer details.
+    If not found:
+    "Farmer not found. Please ask the farmer to register through the Farmer Portal."
+    """
+    user = get_current_user()
+    officer = user.officer_profile
+    if not officer:
+        return jsonify({"success": False, "error": "Officer profile required."}), 403
+
+    query = (request.args.get("query") or request.args.get("search") or request.args.get("identifier") or "").strip()
+    if not query:
+        return jsonify({"success": False, "error": "Please provide a Farmer ID or Mobile Number."}), 400
+
+    # Search central registry by Farmer ID (exact or partial) OR Mobile Number
+    farmer = FarmerProfile.query.filter(
+        (FarmerProfile.farmer_id.ilike(query)) |
+        (FarmerProfile.farmer_id.ilike(f"FMR-{query}"))
+    ).first()
+
+    if not farmer:
+        farmer = FarmerProfile.query.join(User).filter(User.phone == query).first()
+
+    if not farmer and query.isdigit():
+        farmer = FarmerProfile.query.filter_by(id=int(query)).first()
+        if not farmer:
+            farmer = FarmerProfile.query.join(User).filter(User.phone.ilike(f"%{query}%")).first()
+
+    if not farmer:
+        return jsonify({
+            "success": False,
+            "error": "Farmer not found. Please ask the farmer to register through the Farmer Portal."
+        }), 404
+
+    # Check if this farmer is already added to this officer's list
+    is_in_my_list = OfficerFarmer.query.filter_by(
+        officer_id=officer.id,
+        farmer_id=farmer.id
+    ).first() is not None
+
+    return jsonify({
+        "success": True,
+        "farmer": farmer.to_dict(),
+        "is_in_my_list": is_in_my_list
+    }), 200
+
+
+@officer_bp.route("/farmers/add", methods=["POST"])
+@login_required
+@role_required("officer")
+def add_to_my_farmers():
+    """
+    Officer clicks 'Add to My Farmers'.
+    The farmer is then added ONLY to that officer's farmer list.
+    The same farmer can be added to multiple approved officers.
+    """
+    user = get_current_user()
+    officer = user.officer_profile
+    if not officer:
+        return jsonify({"success": False, "error": "Officer profile required."}), 403
+
+    data = request.get_json() or {}
+    identifier = str(data.get("farmer_id") or data.get("farmer_profile_id") or "").strip()
+
+    if not identifier:
+        return jsonify({"success": False, "error": "Farmer identifier is required."}), 400
+
+    # Search central registry
+    farmer = FarmerProfile.query.filter(
+        (FarmerProfile.farmer_id.ilike(identifier)) |
+        (FarmerProfile.farmer_id.ilike(f"FMR-{identifier}"))
+    ).first()
+
+    if not farmer and identifier.isdigit():
+        farmer = FarmerProfile.query.filter_by(id=int(identifier)).first()
+        if not farmer:
+            farmer = FarmerProfile.query.join(User).filter(User.phone == identifier).first()
+
+    if not farmer:
+        return jsonify({
+            "success": False,
+            "error": "Farmer not found. Please ask the farmer to register through the Farmer Portal."
+        }), 404
+
+    existing = OfficerFarmer.query.filter_by(
+        officer_id=officer.id,
+        farmer_id=farmer.id
+    ).first()
+
+    if existing:
+        return jsonify({
+            "success": True,
+            "message": f"Farmer {farmer.user.name if farmer.user else farmer.farmer_id} is already in your My Farmers list.",
+            "farmer": farmer.to_dict(),
+            "already_added": True
+        }), 200
+
+    try:
+        new_link = OfficerFarmer(
+            officer_id=officer.id,
+            farmer_id=farmer.id
+        )
+        db.session.add(new_link)
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": f"Farmer {farmer.user.name if farmer.user else farmer.farmer_id} added to My Farmers successfully.",
+            "farmer": farmer.to_dict()
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": f"Failed to add farmer to your list: {e!s}"}), 500
+
+
+@officer_bp.route("/farmers/remove", methods=["POST"])
+@officer_bp.route("/farmers/<int:farmer_profile_id>", methods=["DELETE"])
+@login_required
+@role_required("officer")
+def remove_from_my_farmers(farmer_profile_id=None):
+    """
+    Officer can Remove the farmer from their list.
+    Removing must NOT delete the farmer from the central Farmer Registry.
+    """
+    user = get_current_user()
+    officer = user.officer_profile
+    if not officer:
+        return jsonify({"success": False, "error": "Officer profile required."}), 403
+
+    if not farmer_profile_id:
+        data = request.get_json() or {}
+        fid_val = data.get("farmer_profile_id") or data.get("farmer_id")
+        if isinstance(fid_val, int) or (isinstance(fid_val, str) and fid_val.isdigit()):
+            farmer_profile_id = int(fid_val)
+        elif isinstance(fid_val, str) and fid_val.strip():
+            f = FarmerProfile.query.filter_by(farmer_id=fid_val.strip()).first()
+            if f:
+                farmer_profile_id = f.id
+
+    if not farmer_profile_id:
+        return jsonify({"success": False, "error": "Farmer ID is required."}), 400
+
+    link = OfficerFarmer.query.filter_by(
+        officer_id=officer.id,
+        farmer_id=farmer_profile_id
+    ).first()
+
+    if not link:
+        return jsonify({"success": False, "error": "Farmer is not in your list."}), 404
+
+    try:
+        db.session.delete(link)
+        db.session.commit()
+        return jsonify({
+            "success": True,
+            "message": "Farmer removed from your list successfully. The farmer record remains safely in the central Farmer Registry."
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": f"Failed to remove farmer from your list: {e!s}"}), 500
+
+
+@officer_bp.route("/farmer-lookup", methods=["GET"])
+@officer_bp.route("/farmer-lookup/<farmer_identifier>", methods=["GET"])
+@login_required
+@role_required("officer")
+def lookup_farmer(farmer_identifier=None):
+    """
+    Fetches registered farmer details for evaluation.
+    Officer can select/search ONLY farmers from their own 'My Farmers' list.
+    If farmer is not found:
+    "Farmer not found. Please ask the farmer to register through the Farmer Portal."
+    """
+    user = get_current_user()
+    officer = user.officer_profile
+    if not officer:
+        return jsonify({"success": False, "error": "Officer profile required."}), 403
+
+    fid = (farmer_identifier or request.args.get("farmer_id") or "").strip()
+    if not fid:
+        return jsonify({"success": False, "error": "Farmer ID is required."}), 400
+
+    # Search central registry first
+    farmer = FarmerProfile.query.filter(
+        (FarmerProfile.farmer_id.ilike(fid)) | (FarmerProfile.farmer_id.ilike(f"FMR-{fid}"))
+    ).first()
+
+    if not farmer and fid.isdigit():
+        farmer = FarmerProfile.query.filter_by(id=int(fid)).first()
+        if not farmer:
+            farmer = FarmerProfile.query.join(User).filter(User.phone == fid).first()
+
+    if not farmer:
+        return jsonify({
+            "success": False,
+            "error": "Farmer not found. Please ask the farmer to register through the Farmer Portal."
+        }), 404
+
+    # Verify the farmer is in THIS officer's My Farmers list
+    link = OfficerFarmer.query.filter_by(officer_id=officer.id, farmer_id=farmer.id).first()
+    if not link:
+        return jsonify({
+            "success": False,
+            "error": "Farmer not found. Please ask the farmer to register through the Farmer Portal.",
+            "not_in_officer_list": True,
+            "tip": "Farmer is in the central registry but not in your My Farmers list. Please add them from Manage Farmers first."
+        }), 404
+
+    return jsonify({
+        "success": True,
+        "message": f"Farmer details retrieved successfully for {farmer.user.name if farmer.user else ''}",
+        "farmer": farmer.to_dict()
     }), 200
 
 
@@ -125,49 +359,11 @@ def get_farmers():
 @login_required
 @role_required("officer")
 def create_farmer():
-    """Allows an officer to quickly register a new farmer during procurement."""
-    data = request.get_json() or {}
-    name = data.get("name", "").strip()
-    phone = data.get("phone", "").strip()
-    email = data.get("email", "").strip() or None
-    village = data.get("village", "").strip()
-    taluka = data.get("taluka", "").strip()
-    district = data.get("district", "").strip()
-    state = data.get("state", "Maharashtra").strip()
-    default_pw = data.get("password", "farmer123")
-
-    if not name or not phone or len(phone) < 10 or not village or not taluka or not district:
-        return jsonify({"success": False, "error": "Name, 10-digit mobile, village, taluka and district are required."}), 400
-
-    if User.query.filter_by(phone=phone).first():
-        return jsonify({"success": False, "error": "Farmer with this mobile number already exists."}), 400
-
-    try:
-        user = User(name=name, phone=phone, email=email, role="farmer")
-        user.set_password(default_pw)
-        db.session.add(user)
-        db.session.flush()
-
-        farmer_id = generate_farmer_id()
-        farmer_profile = FarmerProfile(
-            user_id=user.id,
-            farmer_id=farmer_id,
-            village=village,
-            taluka=taluka,
-            district=district,
-            state=state
-        )
-        db.session.add(farmer_profile)
-        db.session.commit()
-
-        return jsonify({
-            "success": True,
-            "message": f"Farmer {name} registered with ID: {farmer_id}",
-            "farmer": farmer_profile.to_dict()
-        }), 201
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"success": False, "error": f"Failed to add farmer: {e!s}"}), 500
+    """Farmer registration is NOT allowed through the Officer Portal."""
+    return jsonify({
+        "success": False,
+        "error": "Farmer registration must happen ONLY through the Farmer Portal. Officer registration is disabled."
+    }), 403
 
 
 @officer_bp.route("/evaluate", methods=["POST"])
@@ -177,6 +373,7 @@ def run_evaluation():
     """
     Step 2/3 of Onion Evaluation Workflow:
     Accepts farmer_id and 1 to any number of uploaded image files (different angles/samples).
+    Validates farmer is in officer's My Farmers list.
     Runs YOLO detection and Keras classification across all images.
     Returns aggregated AI results for Officer review.
     """
@@ -195,7 +392,15 @@ def run_evaluation():
         farmer = db.session.get(FarmerProfile, int(farmer_id_str))
 
     if not farmer:
-        return jsonify({"success": False, "error": f"Farmer '{farmer_id_str}' not found."}), 404
+        return jsonify({"success": False, "error": "Farmer not found. Please ask the farmer to register through the Farmer Portal."}), 404
+
+    # Verify farmer belongs to this officer's My Farmers list
+    link = OfficerFarmer.query.filter_by(officer_id=officer.id, farmer_id=farmer.id).first()
+    if not link:
+        return jsonify({
+            "success": False,
+            "error": "Selected farmer is not in your My Farmers list. Please add them from Manage Farmers first."
+        }), 400
 
     # Collect all uploaded image files (accepts multiple under 'images' or 'image')
     uploaded_files = []
@@ -227,6 +432,12 @@ def run_evaluation():
     # Run AI Pipeline across all images
     try:
         results = evaluate_multiple_onion_images(saved_paths)
+    except ImageQualityError as eq:
+        return jsonify({
+            "success": False,
+            "error": eq.message,
+            "code": eq.error_code
+        }), 400
     except Exception as e:
         return jsonify({"success": False, "error": f"AI evaluation could not be completed: {e!s}"}), 500
 
@@ -336,6 +547,9 @@ def run_evaluation():
                 "grades": results["grades"],
                 "overall_result": results["overall_result"],
                 "quality_summary": results["quality_summary"],
+                "is_overlapping": results.get("is_overlapping", False),
+                "overlapping_pairs": results.get("overlapping_pairs", 0),
+                "advisory_notes": results.get("advisory_notes"),
                 "annotated_image_url": annotated_url,
                 "images": [
                     {
@@ -404,6 +618,58 @@ def confirm_evaluation(eval_id):
     if payload.get("mandi_price_date"):
         evaluation.mandi_price_date = str(payload.get("mandi_price_date")).strip()
 
+    # Process Officer Item Overrides / Human Review
+    item_overrides = payload.get("item_overrides")
+    if item_overrides and isinstance(item_overrides, list):
+        override_map = {}
+        for it in item_overrides:
+            if isinstance(it, dict) and "onion_number" in it and "class_name" in it:
+                try:
+                    override_map[int(it["onion_number"])] = str(it["class_name"]).strip()
+                except (ValueError, TypeError):
+                    pass
+
+        if override_map:
+            for item in evaluation.items:
+                if item.onion_number in override_map:
+                    new_c = override_map[item.onion_number]
+                    if new_c in Config.QUALITY_CLASSES:
+                        item.class_name = new_c
+
+            # Recalculate evaluation-level counts
+            h_count = sum(1 for it in evaluation.items if it.class_name == "Healthy")
+            d_count = sum(1 for it in evaluation.items if it.class_name == "Damaged")
+            r_count = sum(1 for it in evaluation.items if it.class_name == "Rotten")
+            s_count = sum(1 for it in evaluation.items if it.class_name == "Sprouted")
+
+            evaluation.healthy_count = h_count
+            evaluation.damaged_count = d_count
+            evaluation.rotten_count = r_count
+            evaluation.sprouted_count = s_count
+            evaluation.uncertain_count = sum(1 for it in evaluation.items if it.class_name not in Config.QUALITY_CLASSES)
+
+            evaluation.grade_a_count = h_count
+            evaluation.urs_count = d_count
+            evaluation.rejected_count = r_count + s_count
+
+            tot_items = len(evaluation.items) or 1
+            ga_rate = round((h_count / tot_items) * 100, 1)
+            urs_rate = round((d_count / tot_items) * 100, 1)
+            if ga_rate >= 75:
+                evaluation.overall_result = "Grade A - Premium Quality"
+            elif (ga_rate + urs_rate) >= 70:
+                evaluation.overall_result = "URS Standard - Commercial Quality"
+            else:
+                evaluation.overall_result = "High Rejection - Substandard Batch"
+
+            # Update per-image counts in EvaluationImage
+            for eval_img in evaluation.images:
+                sub_items = [it for it in evaluation.items if (it.image_order or 1) == eval_img.image_order]
+                eval_img.healthy_count = sum(1 for it in sub_items if it.class_name == "Healthy")
+                eval_img.damaged_count = sum(1 for it in sub_items if it.class_name == "Damaged")
+                eval_img.rotten_count = sum(1 for it in sub_items if it.class_name == "Rotten")
+                eval_img.sprouted_count = sum(1 for it in sub_items if it.class_name == "Sprouted")
+
     # Recalculate price estimation to guarantee data consistency
     total_onions = evaluation.total_onions or 1
     ga_pct = round((evaluation.grade_a_count / total_onions) * 100, 1)
@@ -426,19 +692,25 @@ def confirm_evaluation(eval_id):
     evaluation.estimated_price_per_quintal = price_calc["estimated_price_per_quintal"]
     evaluation.total_payout = price_calc["total_payout"]
 
+    language = str(payload.get("language") or "en").lower().strip()
+    if language not in ("en", "hi", "mr"):
+        language = "en"
+    evaluation.report_language = language
+
     try:
         report_id = generate_report_id()
         evaluation.report_id = report_id
         evaluation.status = "confirmed"
         evaluation.evaluation_date = datetime.now(timezone.utc)
 
-        # Generate official PDF Report with Price Estimation Table
-        _pdf_fn, pdf_fp, pdf_size = generate_evaluation_pdf(evaluation)
+        # Generate official PDF Report with Price Estimation Table in selected language
+        _pdf_fn, pdf_fp, pdf_size = generate_evaluation_pdf(evaluation, language=language)
 
         report = Report(
             evaluation_id=evaluation.id,
             pdf_path=pdf_fp,
-            file_size_bytes=pdf_size
+            file_size_bytes=pdf_size,
+            language=language
         )
         db.session.add(report)
         db.session.flush()
@@ -448,6 +720,10 @@ def confirm_evaluation(eval_id):
         from backend.utils.transaction_helpers import create_transaction_for_evaluation
         create_transaction_for_evaluation(evaluation, commit=False)
 
+        # Automatic Predictive Inventory Sync
+        from backend.services.predictive_inventory_service import PredictiveInventoryService
+        PredictiveInventoryService.sync_evaluation_to_inventory(evaluation, commit=False)
+
         record_audit_log(
             action="CONFIRM_EVALUATION",
             entity_type="evaluation",
@@ -456,6 +732,7 @@ def confirm_evaluation(eval_id):
                 "evaluation_id": evaluation.id,
                 "officer_id": evaluation.officer.officer_id if evaluation.officer else None,
                 "farmer_id": evaluation.farmer.farmer_id if evaluation.farmer else None,
+                "language": language,
                 "total_onions": evaluation.total_onions,
                 "grade_a_count": evaluation.grade_a_count,
                 "overall_result": evaluation.overall_result
@@ -466,8 +743,9 @@ def confirm_evaluation(eval_id):
 
         return jsonify({
             "success": True,
-            "message": f"Report {report_id} successfully confirmed and published!",
+            "message": f"Report {report_id} successfully confirmed and published in {language.upper()}!",
             "report_id": report_id,
+            "language": language,
             "pdf_url": f"/reports/download/Onion_Report_{report_id}.pdf",
             "evaluation": evaluation.to_dict()
         }), 200
@@ -530,10 +808,14 @@ def update_payout(eval_id):
     try:
         # Regenerate PDF report if report exists
         if evaluation.status == "confirmed" and evaluation.report_id:
-            _pdf_fn, pdf_fp, pdf_size = generate_evaluation_pdf(evaluation)
+            rep_lang = evaluation.report_language or (evaluation.report.language if evaluation.report else "en")
+            _pdf_fn, pdf_fp, pdf_size = generate_evaluation_pdf(evaluation, language=rep_lang)
             if evaluation.report:
                 evaluation.report.pdf_path = pdf_fp
                 evaluation.report.file_size_bytes = pdf_size
+        # Sync updated physical quantity to Inventory
+        from backend.services.predictive_inventory_service import PredictiveInventoryService
+        PredictiveInventoryService.sync_evaluation_to_inventory(evaluation, commit=False)
 
         db.session.commit()
 
@@ -554,6 +836,7 @@ def update_payout(eval_id):
 def get_reports():
     search = request.args.get("search", "").strip()
     grade = request.args.get("grade", "").strip()
+    lang = request.args.get("language", "").strip() or request.args.get("lang", "").strip()
 
     query = Evaluation.query.filter_by(status="confirmed")
 
@@ -563,6 +846,9 @@ def get_reports():
             (FarmerProfile.farmer_id.ilike(f"%{search}%")) |
             (User.name.ilike(f"%{search}%"))
         )
+
+    if lang:
+        query = query.filter(Evaluation.report_language == lang)
 
     if grade:
         if grade == "Grade A":
@@ -578,3 +864,81 @@ def get_reports():
         "total": len(evals),
         "reports": [e.to_dict() for e in evals]
     }), 200
+
+
+# =========================================================================
+# PREDICTIVE INVENTORY & DECISION SUPPORT APIS
+# =========================================================================
+@officer_bp.route("/predictive-inventory", methods=["GET"])
+@login_required
+@role_required("officer")
+def get_predictive_inventory():
+    """
+    Returns center-level predictive inventory, storage-life analysis,
+    demand forecasts (7d, 14d, 30d), and AI-assisted Sell/Store recommendations.
+    """
+    user = get_current_user()
+    officer = user.officer_profile
+    if not officer:
+        return jsonify({"success": False, "error": "Officer profile not found."}), 404
+
+    center_filter = request.args.get("center", "").strip() or None
+    from backend.services.predictive_inventory_service import PredictiveInventoryService
+    data = PredictiveInventoryService.get_officer_inventory(officer.id, center_filter=center_filter)
+    return jsonify(data), 200
+
+
+@officer_bp.route("/inventory/update-quantity", methods=["POST"])
+@login_required
+@role_required("officer")
+def update_inventory_batch_quantity():
+    """
+    Allows procurement officer to enter or update verified physical quantity
+    for an inventory batch (in kg, quintals, or tonnes).
+    Never guesses or invents quantities.
+    """
+    user = get_current_user()
+    officer = user.officer_profile
+    if not officer:
+        return jsonify({"success": False, "error": "Officer profile not found."}), 404
+
+    payload = request.get_json(silent=True) or {}
+    batch_id = payload.get("batch_id")
+    quantity = payload.get("quantity")
+    unit = payload.get("unit", "kg")
+
+    if not batch_id or quantity is None:
+        return jsonify({"success": False, "error": "Batch ID and quantity are required."}), 400
+
+    from backend.services.predictive_inventory_service import PredictiveInventoryService
+    res = PredictiveInventoryService.update_batch_quantity(batch_id, quantity, unit)
+    status_code = 200 if res.get("success") else 400
+    return jsonify(res), status_code
+
+
+@officer_bp.route("/inventory/dispatch", methods=["POST"])
+@login_required
+@role_required("officer")
+def record_inventory_dispatch():
+    """
+    Records an outbound sale or dispatch of onions from an inventory batch.
+    Strictly prevents negative inventory.
+    """
+    user = get_current_user()
+    officer = user.officer_profile
+    if not officer:
+        return jsonify({"success": False, "error": "Officer profile not found."}), 404
+
+    payload = request.get_json(silent=True) or {}
+    batch_id = payload.get("batch_id")
+    quantity_kg = payload.get("quantity_kg")
+    reason = payload.get("reason", "Outbound sale/dispatch")
+    destination = payload.get("destination", "Local Market / Trader")
+
+    if not batch_id or quantity_kg is None:
+        return jsonify({"success": False, "error": "Batch ID and quantity_kg are required."}), 400
+
+    from backend.services.predictive_inventory_service import PredictiveInventoryService
+    res = PredictiveInventoryService.record_dispatch(batch_id, quantity_kg, reason, destination)
+    status_code = 200 if res.get("success") else 400
+    return jsonify(res), status_code

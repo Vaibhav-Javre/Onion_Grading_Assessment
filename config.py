@@ -28,11 +28,11 @@ class Config:
     STATIC_SAMPLES_FOLDER = os.path.join(BASE_DIR, "static", "samples")
     
     # Upload limits
-    MAX_CONTENT_LENGTH = 25 * 1024 * 1024  # 25 MB max upload
+    MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100 MB max upload for multi-image batches
     ALLOWED_EXTENSIONS: ClassVar[set[str]] = {"png", "jpg", "jpeg", "webp"}
 
     # AI Model Paths
-    DETECTION_MODEL = os.getenv("DETECTION_MODEL", "models/best.pt")
+    DETECTION_MODEL = os.getenv("DETECTION_MODEL", "models/Yolo26.pt")
     CLASSIFICATION_MODEL = os.getenv("CLASSIFICATION_MODEL", "models/final_onion_quality_model.keras")
     
     DETECTION_MODEL_PATH = os.path.join(BASE_DIR, DETECTION_MODEL)

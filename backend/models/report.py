@@ -10,6 +10,7 @@ class Report(db.Model):
     evaluation_id = db.Column(db.Integer, db.ForeignKey("evaluations.id", ondelete="CASCADE"), nullable=False, unique=True)
     pdf_path = db.Column(db.String(255), nullable=False)
     file_size_bytes = db.Column(db.Integer, default=0)
+    language = db.Column(db.String(20), default="en")
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationship
@@ -21,8 +22,9 @@ class Report(db.Model):
             "evaluation_id": self.evaluation_id,
             "pdf_path": self.pdf_path,
             "file_size_bytes": self.file_size_bytes,
+            "language": self.language or "en",
             "created_at": self.created_at.isoformat() if self.created_at else None
         }
 
     def __repr__(self):
-        return f"<Report {self.id} for Evaluation {self.evaluation_id}>"
+        return f"<Report {self.id} for Evaluation {self.evaluation_id} ({self.language})>"

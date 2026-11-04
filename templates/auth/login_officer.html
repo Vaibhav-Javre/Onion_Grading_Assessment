@@ -40,10 +40,18 @@
       <button type="button" onclick="autofillOfficerDemo()" class="btn btn-outline btn-sm" style="width: 100%; margin-top: 0.75rem; font-size: 0.8rem;">
         🔑 Fill Demo Officer Credentials
       </button>
+      <!-- Register as Procurement Officer Link -->
+      <div style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px dashed var(--border-color); text-align: center;">
+        <span style="font-size: 0.85rem; color: var(--text-muted);">New APMC / Mandi Official?</span>
+        <a href="{{ url_for('views.register_officer') }}" class="btn btn-outline" style="width: 100%; margin-top: 0.4rem; border-color: var(--primary-green); color: var(--primary-green); font-weight: 700; font-size: 0.9rem; padding: 0.6rem;">
+          📝 Register as Procurement Officer
+        </a>
+      </div>
     </form>
 
-    <div style="text-align: center; margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border-color); font-size: 0.875rem; color: var(--text-muted);">
-      Farmer Portal? <a href="{{ url_for('views.login_farmer') }}" style="font-weight: 600; color: var(--primary-light);">Farmer Login →</a>
+    <div style="text-align: center; margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border-color); font-size: 0.875rem; color: var(--text-muted); display: flex; justify-content: space-between;">
+      <a href="{{ url_for('views.login_farmer') }}" style="font-weight: 600; color: var(--primary-light);">🧑‍🌾 Farmer Login</a>
+      <a href="{{ url_for('views.login_government') }}" style="font-weight: 600; color: #1e3a8a;">🏛️ Government Portal</a>
     </div>
 
   </div>
@@ -84,13 +92,41 @@ document.getElementById("officerLoginForm").addEventListener("submit", async (e)
       showToast(data.message, "success");
       window.location.href = data.redirect_url;
     } else {
-      errBox.textContent = data.error || "Invalid credentials.";
-      errBox.style.display = "block";
       btn.disabled = false;
       btn.textContent = "Authenticate & Enter Center";
+
+      // Tailored display for Approval Workflow Statuses
+      if (data.status === "PENDING") {
+        errBox.innerHTML = `
+          <div style="font-weight: 700; margin-bottom: 0.25rem;">⏳ Registration Pending Verification</div>
+          <div>${data.error || "Your registration is still pending Government verification."}</div>
+          <div style="margin-top: 0.4rem; font-size: 0.78rem; opacity: 0.9;">Application ID: <b>${data.application_id || "--"}</b></div>
+        `;
+        errBox.style.background = "#fffbeb";
+        errBox.style.borderLeftColor = "#f59e0b";
+        errBox.style.color = "#92400e";
+      } else if (data.status === "REJECTED") {
+        errBox.innerHTML = `
+          <div style="font-weight: 700; margin-bottom: 0.25rem;">❌ Registration Not Approved</div>
+          <div>${data.error || "Your Procurement Officer registration was rejected. Please contact the Government/Admin authority."}</div>
+          ${data.rejection_reason ? `<div style="margin-top: 0.35rem; font-size: 0.8rem;"><b>Reason:</b> ${data.rejection_reason}</div>` : ""}
+        `;
+        errBox.style.background = "#fee2e2";
+        errBox.style.borderLeftColor = "#ef4444";
+        errBox.style.color = "#b91c1c";
+      } else {
+        errBox.textContent = data.error || "Invalid credentials.";
+        errBox.style.background = "#fee2e2";
+        errBox.style.borderLeftColor = "#ef4444";
+        errBox.style.color = "#b91c1c";
+      }
+      errBox.style.display = "block";
     }
   } catch (err) {
     errBox.textContent = "Network error. Please try again.";
+    errBox.style.background = "#fee2e2";
+    errBox.style.borderLeftColor = "#ef4444";
+    errBox.style.color = "#b91c1c";
     errBox.style.display = "block";
     btn.disabled = false;
     btn.textContent = "Authenticate & Enter Center";

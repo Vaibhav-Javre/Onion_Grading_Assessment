@@ -41,6 +41,7 @@ class Evaluation(db.Model):
     estimated_price_per_quintal = db.Column(db.Float, nullable=True)
     quantity_quintals = db.Column(db.Float, default=0.0, nullable=True)
     total_payout = db.Column(db.Float, default=0.0, nullable=True)
+    report_language = db.Column(db.String(20), default="en", nullable=True)
 
     evaluation_date = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     status = db.Column(db.String(30), default="pending_confirmation")  # pending_confirmation, confirmed
@@ -96,6 +97,7 @@ class Evaluation(db.Model):
             },
             "evaluation_date": self.evaluation_date.strftime("%d/%m/%Y %I:%M %p") if self.evaluation_date else "",
             "status": self.status,
+            "report_language": self.report_language or (self.report.language if self.report else "en"),
             "has_pdf": bool(self.report and self.report.pdf_path),
             "pdf_url": f"/api/reports/{self.report_id}/pdf" if self.report_id and self.report else None,
             "items": [item.to_dict() for item in self.items]

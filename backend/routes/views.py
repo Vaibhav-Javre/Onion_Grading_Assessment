@@ -45,6 +45,12 @@ def login_officer():
         return redirect(url_for("views.officer_dashboard"))
     return render_template("auth/login_officer.html")
 
+@views_bp.route("/register/officer")
+def register_officer():
+    if "user_id" in session and session.get("user_role") == "officer":
+        return redirect(url_for("views.officer_dashboard"))
+    return render_template("auth/register_officer.html")
+
 @views_bp.route("/login/government")
 @views_bp.route("/login/admin")
 def login_government():
@@ -102,6 +108,20 @@ def farmer_report_detail(report_identifier):
 def farmer_market():
     user = get_current_user()
     return render_template("farmer/market.html", user=user, farmer=user.farmer_profile)
+
+@views_bp.route("/farmer/predictive-insights")
+@login_required
+@role_required("farmer")
+def farmer_predictive_insights():
+    user = get_current_user()
+    return render_template("farmer/predictive_insights.html", user=user, farmer=user.farmer_profile)
+
+@views_bp.route("/farmer/evaluation-history")
+@login_required
+@role_required("farmer")
+def farmer_evaluation_history():
+    user = get_current_user()
+    return render_template("farmer/evaluation_history.html", user=user, farmer=user.farmer_profile)
 
 @views_bp.route("/farmer/profile")
 @login_required
@@ -165,6 +185,20 @@ def officer_market():
     user = get_current_user()
     return render_template("officer/market.html", user=user, officer=user.officer_profile)
 
+@views_bp.route("/officer/predictive-inventory")
+@login_required
+@role_required("officer")
+def officer_predictive_inventory():
+    user = get_current_user()
+    return render_template("officer/predictive_inventory.html", user=user, officer=user.officer_profile)
+
+@views_bp.route("/officer/evaluation-reports")
+@login_required
+@role_required("officer")
+def officer_evaluation_reports():
+    user = get_current_user()
+    return render_template("officer/evaluation_reports.html", user=user, officer=user.officer_profile)
+
 @views_bp.route("/officer/profile")
 @login_required
 @role_required("officer")
@@ -196,6 +230,14 @@ def government_officers():
     user = get_current_user()
     return render_template("government/officers.html", user=user)
 
+@views_bp.route("/government/officer-verification")
+@views_bp.route("/government/verification")
+@login_required
+@role_required("government", "admin")
+def government_officer_verification():
+    user = get_current_user()
+    return render_template("government/officer_verification.html", user=user)
+
 @views_bp.route("/government/transactions")
 @login_required
 @role_required("government", "admin")
@@ -223,6 +265,20 @@ def government_audit_logs():
 def government_analytics():
     user = get_current_user()
     return render_template("government/analytics.html", user=user)
+
+@views_bp.route("/government/predictive-inventory")
+@login_required
+@role_required("government", "admin")
+def government_predictive_inventory():
+    user = get_current_user()
+    return render_template("government/predictive_inventory.html", user=user)
+
+@views_bp.route("/government/evaluation-reports")
+@login_required
+@role_required("government", "admin")
+def government_evaluation_reports():
+    user = get_current_user()
+    return render_template("government/evaluation_reports.html", user=user)
 
 @views_bp.route("/government/search")
 @login_required

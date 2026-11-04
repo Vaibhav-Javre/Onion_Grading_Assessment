@@ -76,18 +76,43 @@ def _get_evaluation_with_auth(report_identifier):
 
 def _serve_pdf(eval_record, as_attachment=True):
     """Generates PDF if needed and sends via send_file with robust headers."""
+    req_lang = request.args.get("lang", "").lower().strip()
+    force_refresh = request.args.get("refresh", "0") in ("1", "true") or request.args.get("force", "0") in ("1", "true")
     report = eval_record.report
-    pdf_path = report.pdf_path if report else None
+    target_lang = req_lang if req_lang in ("en", "hi", "mr") else (eval_record.report_language or (report.language if report else "en"))
 
-    if not pdf_path or not os.path.exists(pdf_path):
+    pdf_path = report.pdf_path if (report and getattr(report, "language", None) == target_lang) else None
+
+    # Check if existing pdf file is in Config.PDF_REPORT_FOLDER if moved
+    if pdf_path and not os.path.exists(pdf_path):
+        from config import Config
+        candidate = os.path.join(Config.PDF_REPORT_FOLDER, os.path.basename(pdf_path))
+        if os.path.exists(candidate):
+            pdf_path = candidate
+        else:
+            pdf_path = None
+
+    # Detect old/broken PDFs that were generated without image previews (under 15KB with images expected)
+    eval_images = list(eval_record.images) if eval_record.images else []
+    has_expected_images = bool(eval_images or eval_record.annotated_image_path)
+    is_suspiciously_small = False
+    if pdf_path and os.path.exists(pdf_path) and has_expected_images:
         try:
-            _pdf_fn, pdf_fp, pdf_size = generate_evaluation_pdf(eval_record)
+            if os.path.getsize(pdf_path) < 15000:
+                is_suspiciously_small = True
+        except Exception:
+            pass
+
+    if force_refresh or is_suspiciously_small or not pdf_path or not os.path.exists(pdf_path):
+        try:
+            _pdf_fn, pdf_fp, pdf_size = generate_evaluation_pdf(eval_record, language=target_lang)
             if not report:
-                report = Report(evaluation_id=eval_record.id, pdf_path=pdf_fp, file_size_bytes=pdf_size)
+                report = Report(evaluation_id=eval_record.id, pdf_path=pdf_fp, file_size_bytes=pdf_size, language=target_lang)
                 db.session.add(report)
             else:
                 report.pdf_path = pdf_fp
                 report.file_size_bytes = pdf_size
+                report.language = target_lang
             db.session.commit()
             pdf_path = pdf_fp
         except Exception as e:
@@ -132,9 +157,17 @@ def api_download_pdf(report_identifier):
         return error_resp
     report_code = eval_record.report_id or f"ONR-{eval_record.id}"
     view_inline = request.args.get("view", "0") in ("1", "true") or request.args.get("inline", "0") in ("1", "true")
-    url = f"/reports/download/Onion_Report_{report_code}.pdf"
+    req_lang = request.args.get("lang", "").lower().strip()
+    
+    params = []
     if view_inline:
-        url += "?inline=1"
+        params.append("inline=1")
+    if req_lang in ("en", "hi", "mr"):
+        params.append(f"lang={req_lang}")
+        
+    url = f"/reports/download/Onion_Report_{report_code}.pdf"
+    if params:
+        url += "?" + "&".join(params)
     return redirect(url, code=302)
 
 @reports_bp.route("/api/reports/<report_identifier>", methods=["GET"])
