@@ -39,22 +39,30 @@ class ReportLanguagesTestCase(unittest.TestCase):
             # If no pending, create a fresh dummy evaluation
             if not evaluation:
                 farmer = FarmerProfile.query.first()
-                evaluation = Evaluation(
-                    farmer_id=farmer.id,
-                    officer_id=officer.id,
-                    original_image_path="uploads/demo.jpg",
-                    annotated_image_path="outputs/demo.jpg",
-                    total_onions=10,
-                    healthy_count=8,
-                    damaged_count=1,
-                    rotten_count=1,
-                    sprouted_count=0,
-                    grade_a_count=8,
-                    urs_count=1,
-                    rejected_count=1,
-                    overall_result="Grade A",
-                    status="pending_confirmation"
-                )
+                self.assertIsNotNone(farmer, "Farmer profile must exist for testing")
+                self.assertIsNotNone(officer, "Officer profile must exist for testing")
+                
+                import uuid
+                dummy_report_id = f"ONR-2026-{uuid.uuid4().hex[:6].upper()}"
+                
+                evaluation = Evaluation()
+                evaluation.report_id = dummy_report_id
+                evaluation.farmer_id = farmer.id
+                evaluation.officer_id = officer.id
+                evaluation.original_image_path = "uploads/demo.jpg"
+                evaluation.annotated_image_path = "outputs/demo.jpg"
+                evaluation.total_images = 1
+                evaluation.total_onions = 10
+                evaluation.healthy_count = 8
+                evaluation.damaged_count = 1
+                evaluation.rotten_count = 1
+                evaluation.sprouted_count = 0
+                evaluation.uncertain_count = 0
+                evaluation.grade_a_count = 8
+                evaluation.urs_count = 1
+                evaluation.rejected_count = 1
+                evaluation.overall_result = "Grade A"
+                evaluation.status = "pending_confirmation"
                 db.session.add(evaluation)
                 db.session.commit()
 

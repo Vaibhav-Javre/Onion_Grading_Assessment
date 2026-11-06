@@ -4,7 +4,7 @@ from typing import ClassVar
 
 from dotenv import load_dotenv
 
-# Load environment variables from .env if present
+# Load environment variables from .env if presentha
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
